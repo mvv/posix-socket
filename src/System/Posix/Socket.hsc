@@ -435,8 +435,9 @@ recvBufsFrom (Socket fd) bufs' flags = liftBase $ do
                   doRecv
                 _ → throwErrno "send"
             else do
-              addrLen' ← #{peek struct msghdr, msg_namelen} pHdr
-              addr     ← peekSockAddr False pAddr addrLen'
+              addrLen' ← #{peek struct msghdr, msg_namelen} pHdr ∷
+                            IO #{itype socklen_t}
+              addr     ← peekSockAddr False pAddr $ fromIntegral addrLen'
               flags'   ← #{peek struct msghdr, msg_flags} pHdr
               return (addr, fromIntegral r, flags')
       allocaBytesAligned (nn * #{size struct iovec})
@@ -534,7 +535,9 @@ _sendBufs (Socket fd) bufs' flags mAddr = liftBase $ do
           #{poke struct msghdr, msg_name}    pHdr pAddr
           #{poke struct msghdr, msg_namelen} pHdr addrLen
           cont
-      Nothing →
+      Nothing → do
+        #{poke struct msghdr, msg_name}    pHdr nullPtr
+        #{poke struct msghdr, msg_namelen} pHdr (0 ∷ #{itype socklen_t})
         cont
 
 sendBufs ∷ (SockFamily f, MonadBase μ IO)
