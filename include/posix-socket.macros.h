@@ -6,7 +6,7 @@
 #define hsc_offsetof(s,f) \
   printf("%lu", (unsigned long) offsetof (s, f));
 #define hsc_itype(t) \
-  printf("%s%i", ((t)(-1)) < 0 ? "Int" : "Word", sizeof (t) * 8);
+  printf("%s%lu", ((t)(-1)) < 0 ? "Int" : "Word", sizeof (t) * 8);
 
 #endif /* POSIX_SOCKET_MARCROS_H */
 
