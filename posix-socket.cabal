@@ -39,4 +39,5 @@ Library
   Exposed-Modules:
     System.Posix.Socket
     System.Posix.Socket.Inet
+    System.Posix.Socket.Local
 
