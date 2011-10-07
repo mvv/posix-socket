@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DoAndIfThenElse #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -12,9 +13,8 @@
 -- | POSIX sockets.
 module System.Posix.Socket (
     Socket,
-    socketFd,
+    unsafeSocketFd,
     unsafeSocketFromFd,
-
     SockFamily(..),
     SockAddr(..),
     SockType(..),
@@ -89,6 +89,7 @@ import Control.Monad (void, when, foldM)
 import Control.Monad.Base
 import Control.Exception (throwIO)
 import Control.Concurrent (threadWaitRead, threadWaitWrite)
+import Control.Concurrent.MVar
 import Foreign.Storable (Storable(..))
 import Foreign.Ptr (Ptr, castPtr, nullPtr, plusPtr)
 import Foreign.Marshal.Alloc (alloca, allocaBytesAligned)
@@ -119,17 +120,22 @@ import System.Posix.Internals (setNonBlockingFD)
 #include <posix-socket.macros.h>
 
 -- | Socket of a particular family.
-newtype Socket f = Socket { socketFd ∷ Fd }
-                   deriving (Typeable, Eq, Ord, Storable)
+newtype Socket f = Socket { socketMVar ∷ MVar Fd }
+                   deriving (Typeable, Eq)
 
-instance Show (Socket f) where
-  showsPrec d (Socket fd) = showParen (d > 10) $
-    showString "Socket " . showsPrec 11 fd
+instance Storable (Socket f) where
+  alignment _ = alignment (undefined ∷ Fd)
+  sizeOf    _ = sizeOf (undefined ∷ Fd)
+  peek        = (unsafeSocketFromFd =<<) . peek . castPtr
+  poke p      = (poke (castPtr p) =<<) . readMVar . socketMVar
+
+-- | Get the underlying file descriptor.
+unsafeSocketFd ∷ MonadBase μ IO ⇒ Socket f → μ Fd
+unsafeSocketFd = liftBase . readMVar . socketMVar
 
 -- | Use file descriptor as a socket.
-unsafeSocketFromFd ∷ Fd → Socket f
-unsafeSocketFromFd = Socket
-{-# INLINE unsafeSocketFromFd #-}
+unsafeSocketFromFd ∷ MonadBase μ IO ⇒ Fd → μ (Socket f)
+unsafeSocketFromFd = liftBase . fmap Socket . newMVar
 
 -- | Socket address.
 class SockAddr a where
@@ -269,6 +275,9 @@ withAddr fam local addr f =
   where famCode ∷ #{itype sa_family_t}
         famCode = fromIntegral $ sockFamilyCode fam
 
+withSocketFd ∷ MonadBase μ IO ⇒ Socket f → (Fd → IO α) → μ α
+withSocketFd (Socket v) f = liftBase $ withMVar v f
+
 -- Create a socket. See /socket(3)/.
 -- The underlying file descriptor is non-blocking.
 socket ∷ (SockFamily f, MonadBase μ IO)
@@ -282,23 +291,27 @@ socket f (SockType t) p = liftBase $ do
            t p
   setNonBlockingFD fd True
 #endif
-  return $ Socket $ Fd fd
+  fmap Socket $ newMVar $ Fd fd
 
--- Get socket option value. See /getsockopt(3)/.
-getSockOpt ∷ ∀ f o μ . (SockOpt o, SockOptReadable o ~ o, MonadBase μ IO)
-           ⇒ Socket f → o → μ (SockOptValue o)
-getSockOpt (Socket fd) o =
-  liftBase $ alloca $ \p →
+getFdOpt ∷ ∀ o . (SockOpt o, SockOptReadable o ~ o)
+         ⇒ Fd → o → IO (SockOptValue o)
+getFdOpt fd o =
+  alloca $ \p →
     with (fromIntegral $ sizeOf (undefined ∷ SockOptRaw o)) $ \pSize → do
       throwErrnoIfMinus1_ "getSockOpt" $
         c_getsockopt fd (sockOptLevel o) (sockOptCode o) p pSize
       sockOptValue o <$> peek p
 
+-- Get socket option value. See /getsockopt(3)/.
+getSockOpt ∷ (SockOpt o, SockOptReadable o ~ o, MonadBase μ IO)
+           ⇒ Socket f → o → μ (SockOptValue o)
+getSockOpt s o = withSocketFd s $ \fd → getFdOpt fd o
+
 -- Set socket option value. See /setsockopt(3)/.
 setSockOpt ∷ (SockOpt o, SockOptWritable o ~ o, MonadBase μ IO)
            ⇒ Socket f → o → SockOptValue o → μ ()
-setSockOpt (Socket fd) o v =
-    liftBase $ with raw $ \p →
+setSockOpt s o v = withSocketFd s $ \fd →
+    with raw $ \p →
       throwErrnoIfMinus1_ "setSockOpt" $
         c_setsockopt fd (sockOptLevel o) (sockOptCode o) p $
           fromIntegral (sizeOf raw)
@@ -307,25 +320,25 @@ setSockOpt (Socket fd) o v =
 -- Bind socket to the specified address. See /bind(3)/.
 bind ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
      ⇒ Socket f → SockFamilyAddr f → μ () 
-bind (Socket fd) addr =
-  liftBase $ withAddr (undefined ∷ f) True addr $ \p size →
+bind s addr = withSocketFd s $ \fd →
+  withAddr (undefined ∷ f) True addr $ \p size →
     throwErrnoIfMinus1_ "bind" $ c_bind fd p $ fromIntegral size
 
 -- Connect socket to the specified address. This function blocks.
 -- See /connect(3)/.
 connect ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
         ⇒ Socket f → SockFamilyAddr f → μ ()
-connect s@(Socket fd) addr =
-    liftBase $ withAddr (undefined ∷ f) False addr $ \p size →
-      doConnect p $ fromIntegral size
-  where doConnect p size = do
+connect s addr = withSocketFd s $ \fd →
+    withAddr (undefined ∷ f) False addr $ \p size →
+      doConnect fd p $ fromIntegral size
+  where doConnect fd p size = do
           r ← c_connect fd p size
           if r == -1 then do
             errno ← getErrno
             case errno of
               e | e == eINPROGRESS → do
                 threadWaitWrite fd
-                errno' ← getSockOpt s SO_ERROR
+                errno' ← getFdOpt fd SO_ERROR
                 when (errno' /= eOK) $
                   throwIO $ errnoToIOError "connect" errno' Nothing Nothing
               _ → throwErrno "connect"
@@ -337,8 +350,8 @@ connect s@(Socket fd) addr =
 -- See /connect(3)/.
 tryConnect ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
            ⇒ Socket f → SockFamilyAddr f → μ Bool
-tryConnect s@(Socket fd) addr =
-  liftBase $ withAddr (undefined ∷ f) False addr $ \p size → do
+tryConnect s addr = withSocketFd s $ \fd →
+  withAddr (undefined ∷ f) False addr $ \p size → do
     r ← c_connect fd p $ fromIntegral size
     if r == -1
       then do
@@ -351,17 +364,17 @@ tryConnect s@(Socket fd) addr =
 
 -- Listen for connections on the given socket. See /listen(2)/.
 listen ∷ MonadBase μ IO ⇒ Socket f → Int → μ ()
-listen (Socket fd) backlog =
-  liftBase $ throwErrnoIfMinus1_ "listen" $ c_listen fd $ fromIntegral backlog
+listen s backlog = withSocketFd s $ \fd →
+  throwErrnoIfMinus1_ "listen" $ c_listen fd $ fromIntegral backlog
 
 -- Accept a connection on the given socket. This function blocks.
 -- See /accept(2)/.
 accept ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
        ⇒ Socket f → μ (Socket f, SockFamilyAddr f)
-accept (Socket fd) = do
-    liftBase $ allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
-      with size $ \pSize → doAccept p pSize
-  where doAccept p pSize = do
+accept s = withSocketFd s $ \fd →
+    allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
+      with size $ \pSize → doAccept fd p pSize
+  where doAccept fd p pSize = do
           cfd ← c_accept fd p pSize
 #ifdef HAVE_ACCEPT_WITH_FLAGS
                   #{const SOCK_NONBLOCK}
@@ -371,20 +384,20 @@ accept (Socket fd) = do
             case errno of
               e | e == eAGAIN || e == eWOULDBLOCK → do
                 threadWaitRead fd
-                doAccept p pSize
+                doAccept fd p pSize
               _ → throwErrno "accept"
           else do
             addr ← peekAddrOfSize (undefined ∷ f) False p pSize
 #ifndef HAVE_ACCEPT_WITH_FLAGS
             setNonBlockingFD cfd True
 #endif
-            return (Socket $ Fd cfd, addr)
+            (, addr) <$> unsafeSocketFromFd (Fd cfd)
 
 -- Get the local address. See /getsockname(3)/.
 getLocalAddr ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
              ⇒ Socket f → μ (SockFamilyAddr f)
-getLocalAddr (Socket fd) =
-  liftBase $ allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
+getLocalAddr s = withSocketFd s $ \fd →
+  allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
     with size $ \pSize → do
       throwErrnoIfMinus1_ "getLocalAddr" $ c_getsockname fd p pSize
       peekAddrOfSize (undefined ∷ f) True p pSize
@@ -392,16 +405,16 @@ getLocalAddr (Socket fd) =
 -- Get the remote address. See /getpeername(3)/.
 getRemoteAddr ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
               ⇒ Socket f → μ (SockFamilyAddr f)
-getRemoteAddr (Socket fd) =
-  liftBase $ allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
+getRemoteAddr s = withSocketFd s $ \fd →
+  allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
     with size $ \pSize → do
       throwErrnoIfMinus1_ "getRemoteAddr" $ c_getpeername fd p pSize
       peekAddrOfSize (undefined ∷ f) False p pSize
 
 -- Check if socket has out-of-band data. See /sockatmark(3)/.
 hasOOBData ∷ MonadBase μ IO ⇒ Socket f → μ Bool
-hasOOBData (Socket fd) =
-  liftBase $ ((== 1) <$>) $ throwErrnoIfMinus1 "hasOOBData" $ c_sockatmark fd
+hasOOBData s = withSocketFd s $ \fd →
+  fmap (== 1) $ throwErrnoIfMinus1 "hasOOBData" $ c_sockatmark fd
 
 throwCustomErrno ∷ String → Errno → IO α
 throwCustomErrno loc errno =
@@ -413,7 +426,7 @@ throwInval loc = throwCustomErrno loc eINVAL
 recvBufsFrom ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
              ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
              → μ (SockFamilyAddr f, Int, MsgFlags)
-recvBufsFrom (Socket fd) bufs' flags = liftBase $ do
+recvBufsFrom s bufs' flags = withSocketFd s $ \fd → do
   let (bufs, bufs'') = partition ((> 0) . snd) bufs'
       nn             = length bufs
   when (any ((< 0) . snd) bufs'' || nn == 0) $
@@ -496,7 +509,7 @@ recvFrom s len = do
 _sendBufs ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
           ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
           → Maybe (SockFamilyAddr f) → μ Int
-_sendBufs (Socket fd) bufs' flags mAddr = liftBase $ do
+_sendBufs s bufs' flags mAddr = withSocketFd s $ \fd → do
   let (bufs, bufs'') = partition ((> 0) . snd) bufs'
       nn             = length bufs
   when (any ((< 0) . snd) bufs'') $
@@ -600,8 +613,8 @@ sendTo s bs addr = sendTo' s bs noFlags addr
 
 -- Shut down part of a full-duplex connection. See /shutdown(3)/.
 shutdown ∷ MonadBase μ IO ⇒ Socket f → SockOps → μ ()
-shutdown (Socket fd) dirs =
-    liftBase $ forM_ how $ throwErrnoIfMinus1_ "shutdown" . c_shutdown fd
+shutdown s dirs = withSocketFd s $ \fd →
+    forM_ how $ throwErrnoIfMinus1_ "shutdown" . c_shutdown fd
   where how = if dirs .>=. sendSockOp then
                 if dirs .>=. recvSockOp then
                   Just #{const SHUT_RDWR}
@@ -615,7 +628,9 @@ shutdown (Socket fd) dirs =
 
 -- Close socket. See /close(3)/.
 close ∷ MonadBase μ IO ⇒ Socket f → μ ()
-close (Socket fd) = liftBase $ closeFd fd
+close (Socket v) = liftBase $ modifyMVar_ v $ \fd → do
+  when (fd >= 0) $ closeFd fd
+  return (-1)
 
 foreign import ccall "socket"
   c_socket ∷ CInt → CInt → SockProto → IO CInt
