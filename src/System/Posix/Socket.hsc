@@ -100,6 +100,7 @@ import Foreign.C.Error (Errno(..), eOK, eINVAL, eMSGSIZE, eINPROGRESS, eAGAIN,
                         throwErrno, throwErrnoIfMinus1, throwErrnoIfMinus1_)
 import System.Posix.Types (Fd(..), CSsize)
 import System.Posix.IO (closeFd)
+import GHC.Conc (closeFdWith)
 
 #ifdef __linux__
 # include <linux/version.h>
@@ -629,7 +630,7 @@ shutdown s dirs = withSocketFd s $ \fd →
 -- Close socket. See /close(3)/.
 close ∷ MonadBase μ IO ⇒ Socket f → μ ()
 close (Socket v) = liftBase $ modifyMVar_ v $ \fd → do
-  when (fd >= 0) $ closeFd fd
+  when (fd >= 0) $ closeFdWith closeFd fd
   return (-1)
 
 foreign import ccall "socket"
