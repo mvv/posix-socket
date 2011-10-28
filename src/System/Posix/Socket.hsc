@@ -94,11 +94,17 @@ import Foreign.Storable (Storable(..))
 import Foreign.Ptr (Ptr, castPtr, nullPtr, plusPtr)
 import Foreign.Marshal.Alloc (alloca, allocaBytesAligned)
 import Foreign.Marshal.Utils (with)
+#if __GLASGOW_HASKELL__ >= 703
+import Foreign.C.Types (CInt(..), CSize(..))
+import System.Posix.Types (CSsize(..))
+#else
 import Foreign.C.Types (CInt, CSize)
+import System.Posix.Types (CSsize)
+#endif
 import Foreign.C.Error (Errno(..), eOK, eINVAL, eMSGSIZE, eINPROGRESS, eAGAIN,
                         eWOULDBLOCK, getErrno, errnoToIOError,
                         throwErrno, throwErrnoIfMinus1, throwErrnoIfMinus1_)
-import System.Posix.Types (Fd(..), CSsize)
+import System.Posix.Types (Fd(..))
 import System.Posix.IO (closeFd)
 import GHC.Conc (closeFdWith)
 
