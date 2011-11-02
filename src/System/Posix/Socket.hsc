@@ -13,6 +13,7 @@
 -- | POSIX sockets.
 module System.Posix.Socket (
     Socket,
+    withSocketFd,
     unsafeSocketFd,
     unsafeSocketFromFd,
     SockFamily(..),
@@ -130,11 +131,11 @@ import System.Posix.Internals (setNonBlockingFD)
 newtype Socket f = Socket { socketMVar ∷ MVar Fd }
                    deriving (Typeable, Eq)
 
-instance Storable (Socket f) where
-  alignment _ = alignment (undefined ∷ Fd)
-  sizeOf    _ = sizeOf (undefined ∷ Fd)
-  peek        = (unsafeSocketFromFd =<<) . peek . castPtr
-  poke p      = (poke (castPtr p) =<<) . readMVar . socketMVar
+-- | Lock the socket and pass the underlying file descriptor to the given
+--   action.
+withSocketFd ∷ MonadBase μ IO ⇒ Socket f → (Fd → IO α) → μ α
+withSocketFd (Socket v) f = liftBase $ withMVar v f
+{-# INLINE withSocketFd #-}
 
 -- | Get the underlying file descriptor.
 unsafeSocketFd ∷ MonadBase μ IO ⇒ Socket f → μ Fd
@@ -281,9 +282,6 @@ withAddr fam local addr f =
       f p size
   where famCode ∷ #{itype sa_family_t}
         famCode = fromIntegral $ sockFamilyCode fam
-
-withSocketFd ∷ MonadBase μ IO ⇒ Socket f → (Fd → IO α) → μ α
-withSocketFd (Socket v) f = liftBase $ withMVar v f
 
 -- Create a socket. See /socket(3)/.
 -- The underlying file descriptor is non-blocking.
