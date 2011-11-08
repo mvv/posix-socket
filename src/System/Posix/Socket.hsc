@@ -133,16 +133,16 @@ newtype Socket f = Socket { socketMVar ∷ MVar Fd }
 
 -- | Lock the socket and pass the underlying file descriptor to the given
 --   action.
-withSocketFd ∷ MonadBase μ IO ⇒ Socket f → (Fd → IO α) → μ α
+withSocketFd ∷ MonadBase IO μ ⇒ Socket f → (Fd → IO α) → μ α
 withSocketFd (Socket v) f = liftBase $ withMVar v f
 {-# INLINE withSocketFd #-}
 
 -- | Get the underlying file descriptor.
-unsafeSocketFd ∷ MonadBase μ IO ⇒ Socket f → μ Fd
+unsafeSocketFd ∷ MonadBase IO μ ⇒ Socket f → μ Fd
 unsafeSocketFd = liftBase . readMVar . socketMVar
 
 -- | Use file descriptor as a socket.
-unsafeSocketFromFd ∷ MonadBase μ IO ⇒ Fd → μ (Socket f)
+unsafeSocketFromFd ∷ MonadBase IO μ ⇒ Fd → μ (Socket f)
 unsafeSocketFromFd = liftBase . fmap Socket . newMVar
 
 -- | Socket address.
@@ -285,7 +285,7 @@ withAddr fam local addr f =
 
 -- Create a socket. See /socket(3)/.
 -- The underlying file descriptor is non-blocking.
-socket ∷ (SockFamily f, MonadBase μ IO)
+socket ∷ (SockFamily f, MonadBase IO μ)
        ⇒ f → SockType → SockProto → μ (Socket f)
 socket f (SockType t) p = liftBase $ do
   fd ← throwErrnoIfMinus1 "socket" $
@@ -308,12 +308,12 @@ getFdOpt fd o =
       sockOptValue o <$> peek p
 
 -- Get socket option value. See /getsockopt(3)/.
-getSockOpt ∷ (SockOpt o, SockOptReadable o ~ o, MonadBase μ IO)
+getSockOpt ∷ (SockOpt o, SockOptReadable o ~ o, MonadBase IO μ)
            ⇒ Socket f → o → μ (SockOptValue o)
 getSockOpt s o = withSocketFd s $ \fd → getFdOpt fd o
 
 -- Set socket option value. See /setsockopt(3)/.
-setSockOpt ∷ (SockOpt o, SockOptWritable o ~ o, MonadBase μ IO)
+setSockOpt ∷ (SockOpt o, SockOptWritable o ~ o, MonadBase IO μ)
            ⇒ Socket f → o → SockOptValue o → μ ()
 setSockOpt s o v = withSocketFd s $ \fd →
     with raw $ \p →
@@ -323,7 +323,7 @@ setSockOpt s o v = withSocketFd s $ \fd →
   where raw = sockOptRaw o v
 
 -- Bind socket to the specified address. See /bind(3)/.
-bind ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+bind ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
      ⇒ Socket f → SockFamilyAddr f → μ () 
 bind s addr = withSocketFd s $ \fd →
   withAddr (undefined ∷ f) True addr $ \p size →
@@ -331,7 +331,7 @@ bind s addr = withSocketFd s $ \fd →
 
 -- Connect socket to the specified address. This function blocks.
 -- See /connect(3)/.
-connect ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+connect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
         ⇒ Socket f → SockFamilyAddr f → μ ()
 connect s addr = withSocketFd s $ \fd →
     withAddr (undefined ∷ f) False addr $ \p size →
@@ -353,7 +353,7 @@ connect s addr = withSocketFd s $ \fd →
 -- Try to connect socket without blocking. On success 'True' is returned.
 -- If the connection did not succeed immediately, 'False' is returned.
 -- See /connect(3)/.
-tryConnect ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+tryConnect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
            ⇒ Socket f → SockFamilyAddr f → μ Bool
 tryConnect s addr = withSocketFd s $ \fd →
   withAddr (undefined ∷ f) False addr $ \p size → do
@@ -368,13 +368,13 @@ tryConnect s addr = withSocketFd s $ \fd →
         return True
 
 -- Listen for connections on the given socket. See /listen(2)/.
-listen ∷ MonadBase μ IO ⇒ Socket f → Int → μ ()
+listen ∷ MonadBase IO μ ⇒ Socket f → Int → μ ()
 listen s backlog = withSocketFd s $ \fd →
   throwErrnoIfMinus1_ "listen" $ c_listen fd $ fromIntegral backlog
 
 -- Accept a connection on the given socket. This function blocks.
 -- See /accept(2)/.
-accept ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+accept ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
        ⇒ Socket f → μ (Socket f, SockFamilyAddr f)
 accept s = withSocketFd s $ \fd →
     allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
@@ -399,7 +399,7 @@ accept s = withSocketFd s $ \fd →
             (, addr) <$> unsafeSocketFromFd (Fd cfd)
 
 -- Get the local address. See /getsockname(3)/.
-getLocalAddr ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+getLocalAddr ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
              ⇒ Socket f → μ (SockFamilyAddr f)
 getLocalAddr s = withSocketFd s $ \fd →
   allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
@@ -408,7 +408,7 @@ getLocalAddr s = withSocketFd s $ \fd →
       peekAddrOfSize (undefined ∷ f) True p pSize
 
 -- Get the remote address. See /getpeername(3)/.
-getRemoteAddr ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+getRemoteAddr ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
               ⇒ Socket f → μ (SockFamilyAddr f)
 getRemoteAddr s = withSocketFd s $ \fd →
   allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
@@ -417,7 +417,7 @@ getRemoteAddr s = withSocketFd s $ \fd →
       peekAddrOfSize (undefined ∷ f) False p pSize
 
 -- Check if socket has out-of-band data. See /sockatmark(3)/.
-hasOOBData ∷ MonadBase μ IO ⇒ Socket f → μ Bool
+hasOOBData ∷ MonadBase IO μ ⇒ Socket f → μ Bool
 hasOOBData s = withSocketFd s $ \fd →
   fmap (== 1) $ throwErrnoIfMinus1 "hasOOBData" $ c_sockatmark fd
 
@@ -428,7 +428,7 @@ throwCustomErrno loc errno =
 throwInval ∷ String → IO α
 throwInval loc = throwCustomErrno loc eINVAL
 
-recvBufsFrom ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+recvBufsFrom ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
              ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
              → μ (SockFamilyAddr f, Int, MsgFlags)
 recvBufsFrom s bufs' flags = withSocketFd s $ \fd → do
@@ -471,32 +471,32 @@ recvBufsFrom s bufs' flags = withSocketFd s $ \fd → do
         #{poke struct msghdr, msg_flags}      pHdr (0 ∷ CInt)
         doRecv
 
-recvBufs ∷ (SockFamily f, MonadBase μ IO)
+recvBufs ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags → μ (Int, MsgFlags)
 recvBufs s bufs flags = do
   (_, r, flags') ← recvBufsFrom s bufs flags
   return (r, flags')
 
-recvBuf ∷ (SockFamily f, MonadBase μ IO)
+recvBuf ∷ (SockFamily f, MonadBase IO μ)
         ⇒ Socket f → Ptr α → Int → MsgFlags → μ (Int, MsgFlags)
 recvBuf s p len flags = recvBufs s [(castPtr p, len)] flags
 
-recv' ∷ (SockFamily f, MonadBase μ IO)
+recv' ∷ (SockFamily f, MonadBase IO μ)
       ⇒ Socket f → Int → MsgFlags → μ (ByteString, MsgFlags)
 recv' s len flags =
   liftBase $ BS.createAndTrim' len $ \p → do
     (r, flags') ← recvBuf s p len flags
     return (0, r, flags')
 
-recv ∷ (SockFamily f, MonadBase μ IO) ⇒ Socket f → Int → μ ByteString
+recv ∷ (SockFamily f, MonadBase IO μ) ⇒ Socket f → Int → μ ByteString
 recv s len = fst <$> recv' s len noFlags
 
-recvBufFrom ∷ (SockFamily f, MonadBase μ IO)
+recvBufFrom ∷ (SockFamily f, MonadBase IO μ)
             ⇒ Socket f → Ptr α → Int → MsgFlags
             → μ (SockFamilyAddr f, Int, MsgFlags)
 recvBufFrom s p len flags = recvBufsFrom s [(castPtr p, len)] flags
 
-recvFrom' ∷ (SockFamily f, MonadBase μ IO)
+recvFrom' ∷ (SockFamily f, MonadBase IO μ)
           ⇒ Socket f → Int → MsgFlags
           → μ (SockFamilyAddr f, ByteString, MsgFlags)
 recvFrom' s len flags = liftBase $ do
@@ -505,13 +505,13 @@ recvFrom' s len flags = liftBase $ do
     return (0, len', (addr, flags'))
   return (addr, bs, flags')
 
-recvFrom ∷ (SockFamily f, MonadBase μ IO)
+recvFrom ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f → Int → μ (SockFamilyAddr f, ByteString)
 recvFrom s len = do
   (addr, bs, _) ← recvFrom' s len noFlags
   return (addr, bs)
 
-_sendBufs ∷ ∀ f μ . (SockFamily f, MonadBase μ IO)
+_sendBufs ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
           ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
           → Maybe (SockFamilyAddr f) → μ Int
 _sendBufs s bufs' flags mAddr = withSocketFd s $ \fd → do
@@ -558,7 +558,7 @@ _sendBufs s bufs' flags mAddr = withSocketFd s $ \fd → do
         #{poke struct msghdr, msg_namelen} pHdr (0 ∷ #{itype socklen_t})
         cont
 
-sendBufs ∷ (SockFamily f, MonadBase μ IO)
+sendBufs ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags → μ Int
 sendBufs s bufs flags = _sendBufs s bufs flags Nothing
 
@@ -568,56 +568,56 @@ withBufs bss f = go bss []
         go (bs : bss') rbufs = BS.unsafeUseAsCStringLen bs $ \(p, len) →
                                  go bss' ((castPtr p, len) : rbufs)
 
-sendMany' ∷ (SockFamily f, MonadBase μ IO)
+sendMany' ∷ (SockFamily f, MonadBase IO μ)
           ⇒ Socket f → [ByteString] → MsgFlags → μ Int
 sendMany' s bss flags =
   liftBase $ withBufs bss $ \bufs → sendBufs s bufs flags
 
-sendMany ∷ (SockFamily f, MonadBase μ IO) ⇒ Socket f → [ByteString] → μ Int
+sendMany ∷ (SockFamily f, MonadBase IO μ) ⇒ Socket f → [ByteString] → μ Int
 sendMany s bss = sendMany' s bss noFlags
 
-sendBuf ∷ (SockFamily f, MonadBase μ IO)
+sendBuf ∷ (SockFamily f, MonadBase IO μ)
         ⇒ Socket f → Ptr α → Int → MsgFlags → μ Int
 sendBuf s p len flags = sendBufs s [(castPtr p, len)] flags
 
-send' ∷ (SockFamily f, MonadBase μ IO)
+send' ∷ (SockFamily f, MonadBase IO μ)
       ⇒ Socket f → ByteString → MsgFlags → μ Int
 send' s bs flags = liftBase $ BS.unsafeUseAsCStringLen bs $ \(p, len) →
                      sendBuf s p len flags
 
-send ∷ (SockFamily f, MonadBase μ IO) ⇒ Socket f → ByteString → μ Int
+send ∷ (SockFamily f, MonadBase IO μ) ⇒ Socket f → ByteString → μ Int
 send s bs = send' s bs noFlags
 
-sendBufsTo ∷ (SockFamily f, MonadBase μ IO)
+sendBufsTo ∷ (SockFamily f, MonadBase IO μ)
            ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags → SockFamilyAddr f
            → μ Int
 sendBufsTo s bufs flags addr = _sendBufs s bufs flags (Just addr)
 
-sendManyTo' ∷ (SockFamily f, MonadBase μ IO)
+sendManyTo' ∷ (SockFamily f, MonadBase IO μ)
             ⇒ Socket f → [ByteString] → MsgFlags → SockFamilyAddr f → μ Int
 sendManyTo' s bss flags addr = liftBase $ withBufs bss $ \bufs →
                                  sendBufsTo s bufs flags addr
 
-sendManyTo ∷ (SockFamily f, MonadBase μ IO)
+sendManyTo ∷ (SockFamily f, MonadBase IO μ)
            ⇒ Socket f → [ByteString] → SockFamilyAddr f → μ Int
 sendManyTo s bss addr = sendManyTo' s bss noFlags addr
 
-sendBufTo ∷ (SockFamily f, MonadBase μ IO)
+sendBufTo ∷ (SockFamily f, MonadBase IO μ)
           ⇒ Socket f → Ptr α → Int → MsgFlags → SockFamilyAddr f → μ Int
 sendBufTo s p len flags addr = sendBufsTo s [(castPtr p, len)] flags addr
 
-sendTo' ∷ (SockFamily f, MonadBase μ IO)
+sendTo' ∷ (SockFamily f, MonadBase IO μ)
         ⇒ Socket f → ByteString → MsgFlags → SockFamilyAddr f → μ Int
 sendTo' s bs flags addr =
   liftBase $ BS.unsafeUseAsCStringLen bs $ \(p, len) →
     sendBufTo s p len flags addr
 
-sendTo ∷ (SockFamily f, MonadBase μ IO)
+sendTo ∷ (SockFamily f, MonadBase IO μ)
        ⇒ Socket f → ByteString → SockFamilyAddr f → μ Int
 sendTo s bs addr = sendTo' s bs noFlags addr
 
 -- Shut down part of a full-duplex connection. See /shutdown(3)/.
-shutdown ∷ MonadBase μ IO ⇒ Socket f → SockOps → μ ()
+shutdown ∷ MonadBase IO μ ⇒ Socket f → SockOps → μ ()
 shutdown s dirs = withSocketFd s $ \fd →
     forM_ how $ throwErrnoIfMinus1_ "shutdown" . c_shutdown fd
   where how = if dirs .>=. sendSockOp then
@@ -632,7 +632,7 @@ shutdown s dirs = withSocketFd s $ \fd →
                   Nothing
 
 -- Close socket. See /close(3)/.
-close ∷ MonadBase μ IO ⇒ Socket f → μ ()
+close ∷ MonadBase IO μ ⇒ Socket f → μ ()
 close (Socket v) = liftBase $ modifyMVar_ v $ \fd → do
   when (fd >= 0) $ closeFdWith closeFd fd
   return (-1)
