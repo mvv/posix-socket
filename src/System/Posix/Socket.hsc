@@ -128,8 +128,7 @@ import System.Posix.Internals (setNonBlockingFD)
 #include <posix-socket.macros.h>
 
 -- | Socket of a particular family.
-newtype Socket f = Socket { socketMVar ∷ MVar Fd }
-                   deriving (Typeable, Eq)
+newtype Socket f = Socket (MVar Fd) deriving (Typeable, Eq)
 
 -- | Lock the socket and pass the underlying file descriptor to the given
 --   action.
@@ -139,7 +138,7 @@ withSocketFd (Socket v) f = liftBase $ withMVar v f
 
 -- | Get the underlying file descriptor.
 unsafeSocketFd ∷ MonadBase IO μ ⇒ Socket f → μ Fd
-unsafeSocketFd = liftBase . readMVar . socketMVar
+unsafeSocketFd (Socket v) = liftBase $ readMVar v
 
 -- | Use file descriptor as a socket.
 unsafeSocketFromFd ∷ MonadBase IO μ ⇒ Fd → μ (Socket f)
