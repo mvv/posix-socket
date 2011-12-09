@@ -16,6 +16,7 @@ module System.Posix.Socket.Inet (
 import Data.Typeable (Typeable)
 import Data.IP.Addr
 import Control.Applicative ((<$>), (<*>))
+import Foreign.C.Types (CSize)
 import Foreign.Storable (Storable(..))
 import System.Posix.Socket
 
@@ -30,7 +31,9 @@ instance SockAddr Inet4Addr where
   sockAddrSize    _ = #{size struct sockaddr_in}
   peekSockAddr _ p sz =
     if sz /= #{size struct sockaddr_in}
-      then ioError $ userError "peekSockAddr(Inet4Addr): invalid size"
+      then ioError $ userError $
+             "peekSockAddr(Inet4Addr): invalid size " ++ show sz ++
+             " (expected " ++ show (#{size struct sockaddr_in} ∷ CSize) ++ ")"
       else InetAddr <$> #{peek struct sockaddr_in, sin_addr} p
                     <*> #{peek struct sockaddr_in, sin_port} p
   pokeSockAddr _ p (InetAddr addr port) = do
