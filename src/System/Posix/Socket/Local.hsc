@@ -17,7 +17,6 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Unsafe as BS
 import Control.Applicative ((<$>))
-import Control.Monad (when)
 import Foreign.Ptr (castPtr, plusPtr)
 import Foreign.Storable (Storable(..))
 import System.Posix.Socket
@@ -29,23 +28,27 @@ import System.Posix.Socket
 data AF_LOCAL = AF_LOCAL deriving (Typeable, Eq, Show)
 
 -- | Local socket address.
-data LocalAddr = LocalAddr ByteString deriving (Typeable, Eq, Ord, Show)
+data LocalAddr = LocalAddr ByteString
+               | NoLocalAddr
+               deriving (Typeable, Eq, Ord, Show)
 
 instance SockAddr LocalAddr where
   sockAddrMaxSize _ = #{size struct sockaddr_un}
   sockAddrSize (LocalAddr path) = #{offset struct sockaddr_un, sun_path}
                                 + BS.length path + 1
+  sockAddrSize NoLocalAddr = #{size sa_family_t}
   peekSockAddr _ p sz = do
     let offset = #{offset struct sockaddr_un, sun_path}
-    when (sz < offset + 1) $
-      ioError $ userError "peekSockAddr(LocalAddr): invalid size"
-    LocalAddr <$>
-      BS.packCStringLen (castPtr $ plusPtr p offset, sz - offset - 1)
+    if sz < offset + 1
+      then return NoLocalAddr
+      else LocalAddr <$> BS.packCStringLen
+                           (castPtr $ plusPtr p offset, sz - offset - 1)
   pokeSockAddr _ p (LocalAddr path) = do
     let offset = #{offset struct sockaddr_un, sun_path}
     BS.unsafeUseAsCStringLen path $ \(pBs, len) → do
       BS.memcpy (castPtr $ plusPtr p offset) (castPtr pBs) (fromIntegral len)
       poke (castPtr $ plusPtr p $ offset + len) (0 ∷ Word8)
+  pokeSockAddr _ _ NoLocalAddr = return ()
 
 instance SockFamily AF_LOCAL where
   type SockFamilyAddr AF_LOCAL = LocalAddr
