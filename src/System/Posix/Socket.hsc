@@ -427,16 +427,14 @@ throwCustomErrno loc errno =
 throwInval ∷ String → IO α
 throwInval loc = throwCustomErrno loc eINVAL
 
-recvBufsFrom ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
-             ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
-             → μ (SockFamilyAddr f, Int, MsgFlags)
-recvBufsFrom s bufs' flags = withSocketFd s $ \fd → do
+recvBufsFromFd ∷ ∀ f . SockFamily f
+               ⇒ f → Fd → [(Ptr Word8, Int)] → MsgFlags
+               → IO (Maybe (SockFamilyAddr f), Int, MsgFlags)
+recvBufsFromFd _ fd bufs' flags = do
   let (bufs, bufs'') = partition ((> 0) . snd) bufs'
       nn             = length bufs
-  when (any ((< 0) . snd) bufs'' || nn == 0) $
-    throwInval "send"
-  when (nn > #{const UIO_MAXIOV}) $
-    throwCustomErrno "send" eMSGSIZE
+  when (any ((< 0) . snd) bufs'' || nn == 0) $ throwInval "recv"
+  when (nn > #{const UIO_MAXIOV}) $ throwCustomErrno "recv" eMSGSIZE
   allocaBytesAligned #{size struct msghdr}
                      #{alignment struct msghdr} $ \pHdr →
     allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \pAddr addrLen → do
@@ -450,11 +448,14 @@ recvBufsFrom s bufs' flags = withSocketFd s $ \fd → do
                 e | e == eAGAIN || e == eWOULDBLOCK → do
                   threadWaitRead fd
                   doRecv
-                _ → throwErrno "send"
+                _ → throwErrno "recv"
             else do
               addrLen' ← #{peek struct msghdr, msg_namelen} pHdr ∷
                             IO #{itype socklen_t}
-              addr     ← peekSockAddr False pAddr $ fromIntegral addrLen'
+              addr     ← if addrLen' == 0
+                           then return Nothing
+                           else fmap Just $ peekSockAddr False pAddr $
+                                  fromIntegral addrLen'
               flags'   ← #{peek struct msghdr, msg_flags} pHdr
               return (addr, fromIntegral r, flags')
       allocaBytesAligned (nn * #{size struct iovec})
@@ -470,10 +471,28 @@ recvBufsFrom s bufs' flags = withSocketFd s $ \fd → do
         #{poke struct msghdr, msg_flags}      pHdr (0 ∷ CInt)
         doRecv
 
+recvBufsFrom' ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
+              ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
+              → μ (Maybe (SockFamilyAddr f), Int, MsgFlags)
+recvBufsFrom' s bufs flags = withSocketFd s $ \fd →
+  recvBufsFromFd (undefined ∷ f) fd bufs flags
+
+recvBufsFrom ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
+             ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
+             → μ (SockFamilyAddr f, Int, MsgFlags)
+recvBufsFrom s bufs flags = withSocketFd s $ \fd → do
+  (mAddr, n, flags') ← recvBufsFromFd (undefined ∷ f) fd bufs flags
+  let getpeername =
+        allocaMaxAddr (undefined ∷ SockFamilyAddr f) $ \p size →
+          with size $ \pSize → do
+            throwErrnoIfMinus1_ "recv" $ c_getpeername fd p pSize
+            peekAddrOfSize (undefined ∷ f) False p pSize
+  (, n, flags') <$> maybe getpeername return mAddr
+
 recvBufs ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags → μ (Int, MsgFlags)
 recvBufs s bufs flags = do
-  (_, r, flags') ← recvBufsFrom s bufs flags
+  (_, r, flags') ← recvBufsFrom' s bufs flags
   return (r, flags')
 
 recvBuf ∷ (SockFamily f, MonadBase IO μ)
@@ -516,10 +535,8 @@ _sendBufs ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
 _sendBufs s bufs' flags mAddr = withSocketFd s $ \fd → do
   let (bufs, bufs'') = partition ((> 0) . snd) bufs'
       nn             = length bufs
-  when (any ((< 0) . snd) bufs'') $
-    throwInval "send"
-  when (nn > #{const UIO_MAXIOV}) $
-    throwCustomErrno "send" eMSGSIZE
+  when (any ((< 0) . snd) bufs'') $ throwInval "send"
+  when (nn > #{const UIO_MAXIOV}) $ throwCustomErrno "send" eMSGSIZE
   if nn == 0 then return 0
   else allocaBytesAligned #{size struct msghdr}
                           #{alignment struct msghdr} $ \pHdr → do
