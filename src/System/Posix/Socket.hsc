@@ -105,6 +105,7 @@ import System.Posix.Types (CSsize)
 import Foreign.C.Error (Errno(..), eOK, eINVAL, eMSGSIZE, eINPROGRESS, eAGAIN,
                         eWOULDBLOCK, getErrno, errnoToIOError,
                         throwErrno, throwErrnoIfMinus1, throwErrnoIfMinus1_)
+import System.IO.Error (eofErrorType, mkIOError)
 import System.Posix.Types (Fd(..))
 import System.Posix.IO (closeFd)
 import GHC.Conc (closeFdWith)
@@ -442,22 +443,24 @@ recvBufsFromFd _ fd bufs' flags = do
       #{poke struct msghdr, msg_namelen} pHdr addrLen
       let doRecv = do
             r ← c_recvmsg fd pHdr flags
-            if r == -1 then do
-              errno ← getErrno
-              case errno of
-                e | e == eAGAIN || e == eWOULDBLOCK → do
-                  threadWaitRead fd
-                  doRecv
-                _ → throwErrno "recv"
-            else do
-              addrLen' ← #{peek struct msghdr, msg_namelen} pHdr ∷
-                            IO #{itype socklen_t}
-              addr     ← if addrLen' == 0
-                           then return Nothing
-                           else fmap Just $ peekSockAddr False pAddr $
-                                  fromIntegral addrLen'
-              flags'   ← #{peek struct msghdr, msg_flags} pHdr
-              return (addr, fromIntegral r, flags')
+            case r of
+              (-1) → do
+                errno ← getErrno
+                case errno of
+                  e | e == eAGAIN || e == eWOULDBLOCK → do
+                    threadWaitRead fd
+                    doRecv
+                  _ → throwErrno "recv"
+              0 → throwIO $ mkIOError eofErrorType "recv" Nothing Nothing
+              _ → do
+                addrLen' ← #{peek struct msghdr, msg_namelen} pHdr ∷
+                              IO #{itype socklen_t}
+                addr     ← if addrLen' == 0
+                             then return Nothing
+                             else fmap Just $ peekSockAddr False pAddr $
+                                    fromIntegral addrLen'
+                flags'   ← #{peek struct msghdr, msg_flags} pHdr
+                return (addr, fromIntegral r, flags')
       allocaBytesAligned (nn * #{size struct iovec})
                          #{alignment struct iovec} $ \pIoVs → do
         void . ($ bufs) . ($ pIoVs) . foldM $ \pIoV (p, n) → do
