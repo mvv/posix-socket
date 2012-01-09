@@ -9,12 +9,12 @@
 
 -- Internet address families.
 module System.Posix.Socket.Inet (
-    module Data.IP.Addr,
+    module Network.IP.Addr,
     AF_INET(..),
   ) where
 
 import Data.Typeable (Typeable)
-import Data.IP.Addr
+import Network.IP.Addr
 import Control.Applicative ((<$>), (<*>))
 import Foreign.C.Types (CSize)
 import Foreign.Storable (Storable(..))
