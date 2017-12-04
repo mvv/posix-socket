@@ -324,7 +324,7 @@ socket f (SockType t) p = liftBase $ do
            (t .|. #{const SOCK_NONBLOCK}) p
 #else
            t p
-  setNonBlockingFD fd True
+  onException (setNonBlockingFD fd True) (closeFd fd)
 #endif
   fmap Socket $ newMVar $ Fd fd
 
