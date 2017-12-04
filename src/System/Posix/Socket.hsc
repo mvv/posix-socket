@@ -153,13 +153,11 @@ class SockAddr a where
   -- | Size of a particular socket address.
   sockAddrSize    ∷ a → Int
   -- | Read socket address from a memory buffer.
-  peekSockAddr    ∷ Bool  -- ^ Whether the peeked address is local (vs remote)
-                  → Ptr a -- ^ Buffer
+  peekSockAddr    ∷ Ptr a -- ^ Buffer
                   → Int   -- ^ Buffer size
                   → IO a
   -- | Write socket address to a memory buffer.
-  pokeSockAddr    ∷ Bool  -- ^ Whether the poked address is local (vs remote)
-                  → Ptr a -- ^ Buffer of sufficient size
+  pokeSockAddr    ∷ Ptr a -- ^ Buffer of sufficient size
                   → a     -- ^ The address to poke
                   → IO ()
 
@@ -292,22 +290,23 @@ allocaAddr addr f =
   where size = sockAddrSize addr
 
 peekAddrOfSize ∷ SockFamily f
-               ⇒ f → Bool → Ptr (SockFamilyAddr f) → Ptr #{itype socklen_t}
+               ⇒ f → Ptr (SockFamilyAddr f) → Ptr #{itype socklen_t}
                → IO (SockFamilyAddr f)
-peekAddrOfSize fam local p pSize = do
+peekAddrOfSize fam p pSize = do
   outSize ← fromIntegral <$> peek pSize
   famCode ∷ #{itype sa_family_t} ← #{peek struct sockaddr, sa_family} p
   when (fromIntegral famCode /= sockFamilyCode fam) $
     ioError $ userError "Invalid socket address family"
-  peekSockAddr local p outSize
+  peekSockAddr p outSize
 
 withAddr ∷ SockFamily f
-         ⇒ f → Bool → SockFamilyAddr f
+         ⇒ f
+         → SockFamilyAddr f
          → (Ptr (SockFamilyAddr f) → #{itype socklen_t} → IO α)
          → IO α
-withAddr fam local addr f =
+withAddr fam addr f =
     allocaAddr addr $ \p size → do
-      pokeSockAddr local p addr
+      pokeSockAddr p addr
       #{poke struct sockaddr, sa_family} p famCode
       f p size
   where famCode ∷ #{itype sa_family_t}
@@ -356,7 +355,7 @@ setSockOpt s o v = withSocketFd s $ \fd →
 bind ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
      ⇒ Socket f → SockFamilyAddr f → μ ()
 bind s addr = withSocketFd s $ \fd →
-  withAddr (undefined ∷ f) True addr $ \p size →
+  withAddr (undefined ∷ f) addr $ \p size →
     throwErrnoIfMinus1_ "bind" $ c_bind fd p $ fromIntegral size
 
 -- | Connect socket to the specified address. This function blocks.
@@ -364,7 +363,7 @@ bind s addr = withSocketFd s $ \fd →
 connect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
         ⇒ Socket f → SockFamilyAddr f → μ ()
 connect s addr = withSocketFd s $ \fd →
-    withAddr (undefined ∷ f) False addr $ \p size →
+    withAddr (undefined ∷ f) addr $ \p size →
       doConnect fd p $ fromIntegral size
   where doConnect fd p size = do
           r ← c_connect fd p size
@@ -386,7 +385,7 @@ connect s addr = withSocketFd s $ \fd →
 tryConnect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
            ⇒ Socket f → SockFamilyAddr f → μ Bool
 tryConnect s addr = withSocketFd s $ \fd →
-  withAddr (undefined ∷ f) False addr $ \p size → do
+  withAddr (undefined ∷ f) addr $ \p size → do
     r ← c_connect fd p $ fromIntegral size
     if r == -1
       then do
@@ -422,7 +421,7 @@ accept s = withSocketFd s $ \fd →
                 doAccept fd p pSize
               _ → throwErrno "accept"
           else do
-            addr ← peekAddrOfSize (undefined ∷ f) False p pSize
+            addr ← peekAddrOfSize (undefined ∷ f) p pSize
 #ifndef HAVE_ACCEPT_WITH_FLAGS
             setNonBlockingFD cfd True
 #endif
@@ -435,7 +434,7 @@ getLocalAddr s = withSocketFd s $ \fd →
   allocaMaxAddr (Proxy ∷ Proxy (SockFamilyAddr f)) $ \p size →
     with size $ \pSize → do
       throwErrnoIfMinus1_ "getLocalAddr" $ c_getsockname fd p pSize
-      peekAddrOfSize (undefined ∷ f) True p pSize
+      peekAddrOfSize (undefined ∷ f) p pSize
 
 -- | Get the remote address. See /getpeername(3)/.
 getRemoteAddr ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
@@ -444,7 +443,7 @@ getRemoteAddr s = withSocketFd s $ \fd →
   allocaMaxAddr (Proxy ∷ Proxy (SockFamilyAddr f)) $ \p size →
     with size $ \pSize → do
       throwErrnoIfMinus1_ "getRemoteAddr" $ c_getpeername fd p pSize
-      peekAddrOfSize (undefined ∷ f) False p pSize
+      peekAddrOfSize (undefined ∷ f) p pSize
 
 -- | Check if socket has out-of-band data. See /sockatmark(3)/.
 hasOobData ∷ MonadBase IO μ ⇒ Socket f → μ Bool
@@ -487,7 +486,7 @@ recvBufsFromFd _ fd bufs' flags = do
                               IO #{itype socklen_t}
                 addr     ← if addrLen' == 0
                              then return Nothing
-                             else fmap Just $ peekSockAddr False pAddr $
+                             else fmap Just $ peekSockAddr pAddr $
                                     fromIntegral addrLen'
                 flags'   ← #{peek struct msghdr, msg_flags} pHdr
                 return (addr, fromIntegral r, flags')
@@ -562,7 +561,7 @@ recvBufsFrom s bufs flags = withSocketFd s $ \fd → do
         allocaMaxAddr (Proxy ∷ Proxy (SockFamilyAddr f)) $ \p size →
           with size $ \pSize → do
             throwErrnoIfMinus1_ "recv" $ c_getpeername fd p pSize
-            peekAddrOfSize (undefined ∷ f) False p pSize
+            peekAddrOfSize (undefined ∷ f) p pSize
   (, n, flags') <$> maybe getpeername return mAddr
 
 -- | Receive a message from an unconnected socket. See /recvmsg(3)/.
@@ -634,7 +633,7 @@ _sendBufs s bufs' flags mAddr = withSocketFd s $ \fd → do
           doSend
     case mAddr of
       Just addr →
-        withAddr (undefined ∷ f) False addr $ \pAddr addrLen → do
+        withAddr (undefined ∷ f) addr $ \pAddr addrLen → do
           #{poke struct msghdr, msg_name}    pHdr pAddr
           #{poke struct msghdr, msg_namelen} pHdr addrLen
           cont

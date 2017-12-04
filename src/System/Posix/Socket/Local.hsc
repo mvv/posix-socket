@@ -43,18 +43,18 @@ instance SockAddr LocalAddr where
   sockAddrSize (LocalAddr path) = #{offset struct sockaddr_un, sun_path}
                                 + BS.length path + 1
   sockAddrSize NoLocalAddr = #{size sa_family_t}
-  peekSockAddr _ p sz = do
+  peekSockAddr p sz = do
     let offset = #{offset struct sockaddr_un, sun_path}
     if sz < offset + 1
       then return NoLocalAddr
       else LocalAddr <$> BS.packCStringLen
                            (castPtr $ plusPtr p offset, sz - offset - 1)
-  pokeSockAddr _ p (LocalAddr path) = do
+  pokeSockAddr p (LocalAddr path) = do
     let offset = #{offset struct sockaddr_un, sun_path}
     BS.unsafeUseAsCStringLen path $ \(pBs, len) → do
       BS.memcpy (castPtr $ plusPtr p offset) (castPtr pBs) (fromIntegral len)
       poke (castPtr $ plusPtr p $ offset + len) (0 ∷ Word8)
-  pokeSockAddr _ _ NoLocalAddr = return ()
+  pokeSockAddr _ NoLocalAddr = return ()
 
 instance SockFamily AF_LOCAL where
   type SockFamilyAddr AF_LOCAL = LocalAddr
