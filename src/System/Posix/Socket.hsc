@@ -11,73 +11,73 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | POSIX sockets.
-module System.Posix.Socket (
-    Socket,
-    withSocketFd,
-    unsafeSocketFd,
-    unsafeSocketFromFd,
-    SockFamily(..),
-    SockAddr(..),
-    SockType(..),
-    streamSockType,
-    datagramSockType,
-    seqPacketSockType,
-    rawSockType,
-    SockProto(..),
-    defaultSockProto,
-    SockOpt(..),
-    SO_ERROR(..),
-    SO_KEEPALIVE(..),
-    SO_REUSEADDR(..),
-    SockOps,
-    sendSockOp,
-    recvSockOp,
-    MsgFlags,
-    peekMsgFlag,
-    truncMsgFlag,
-    oobMsgFlag,
-    dontRouteMsgFlag,
+module System.Posix.Socket
+  ( Socket
+  , withSocketFd
+  , unsafeSocketFd
+  , unsafeSocketFromFd
+  , SockFamily(..)
+  , SockAddr(..)
+  , SockType(..)
+  , streamSockType
+  , datagramSockType
+  , seqPacketSockType
+  , rawSockType
+  , SockProto(..)
+  , defaultSockProto
+  , SockOpt(..)
+  , SO_ERROR(..)
+  , SO_KEEPALIVE(..)
+  , SO_REUSEADDR(..)
+  , SockOps
+  , sendSockOp
+  , recvSockOp
+  , MsgFlags
+  , peekMsgFlag
+  , truncMsgFlag
+  , oobMsgFlag
+  , dontRouteMsgFlag
 
-    socket,
-    getSockOpt,
-    setSockOpt,
-    bind,
-    connect,
-    tryConnect,
-    listen,
-    accept,
-    getLocalAddr,
-    getRemoteAddr,
-    hasOOBData,
-    recvBufs,
-    recvBuf,
-    recv',
-    recv,
-    recvBufsFrom,
-    recvBufFrom,
-    recvFrom',
-    recvFrom,
-    sendBufs,
-    sendMany',
-    sendMany,
-    sendBuf,
-    send',
-    send,
-    sendBufsTo,
-    sendManyTo',
-    sendManyTo,
-    sendBufTo,
-    sendTo',
-    sendTo,
-    shutdown,
-    close
+  , socket
+  , getSockOpt
+  , setSockOpt
+  , bind
+  , connect
+  , tryConnect
+  , listen
+  , accept
+  , getLocalAddr
+  , getRemoteAddr
+  , hasOOBData
+  , recvBufs
+  , recvBuf
+  , recv'
+  , recv
+  , recvBufsFrom
+  , recvBufFrom
+  , recvFrom'
+  , recvFrom
+  , sendBufs
+  , sendMany'
+  , sendMany
+  , sendBuf
+  , send'
+  , send
+  , sendBufsTo
+  , sendManyTo'
+  , sendManyTo
+  , sendBufTo
+  , sendTo'
+  , sendTo
+  , shutdown
+  , close
   ) where
 
 import Data.Typeable (Typeable)
 import Data.Int
 import Data.Word
 import Data.Bits ((.|.))
-import Data.Default
+import Data.Default.Class
 import Data.List (partition)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as BS

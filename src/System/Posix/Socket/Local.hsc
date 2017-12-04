@@ -5,9 +5,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
 -- Local address family.
-module System.Posix.Socket.Local (
-    AF_LOCAL(..),
-    LocalAddr(..)
+module System.Posix.Socket.Local
+  ( AF_LOCAL(..)
+  , LocalAddr(..)
   ) where
 
 import Data.Typeable (Typeable)

@@ -8,9 +8,9 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- Internet address families.
-module System.Posix.Socket.Inet (
-    module Network.IP.Addr,
-    AF_INET(..),
+module System.Posix.Socket.Inet
+  ( module Network.IP.Addr
+  , AF_INET(..),
   ) where
 
 import Data.Typeable (Typeable)
