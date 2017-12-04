@@ -4,13 +4,15 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
 
--- Local address family.
+-- | Local address family.
 module System.Posix.Socket.Local
-  ( AF_LOCAL(..)
-  , LocalAddr(..)
+  ( LocalAddr(..)
+  , aLocalAddr
+  , AF_LOCAL(..)
   ) where
 
 import Data.Typeable (Typeable)
+import Data.Proxy (Proxy(..))
 import Data.Word (Word8)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -31,6 +33,10 @@ data AF_LOCAL = AF_LOCAL deriving (Typeable, Eq, Show)
 data LocalAddr = LocalAddr ByteString
                | NoLocalAddr
                deriving (Typeable, Eq, Ord, Show)
+
+-- | 'LocalAddr' proxy value.
+aLocalAddr ∷ Proxy LocalAddr
+aLocalAddr = Proxy
 
 instance SockAddr LocalAddr where
   sockAddrMaxSize _ = #{size struct sockaddr_un}
