@@ -14,7 +14,9 @@
 
 -- | POSIX sockets.
 module System.Posix.Socket
-  ( Socket
+  (
+  -- * Socket types
+    Socket
   , withSocketFd
   , unsafeSocketFd
   , unsafeSocketFromFd
@@ -27,11 +29,10 @@ module System.Posix.Socket
   , SO_ERROR(..)
   , SO_KEEPALIVE(..)
   , SO_REUSEADDR(..)
-  , SockOps
-  , sendSockOp
-  , recvSockOp
+  , SockOps(..)
   , MsgFlags(.., MSG_PEEK, MSG_TRUNC, MSG_OOB, MSG_DONTROUTE)
-
+  -- * Socket operations
+  -- ** Creating and connecting
   , socket
   , getSockOpt
   , setSockOpt
@@ -43,6 +44,7 @@ module System.Posix.Socket
   , tryAccept
   , getLocalAddr
   , getRemoteAddr
+  -- ** Receiving messages
   , hasOobData
   , recvBufs
   , recvBuf
@@ -52,6 +54,7 @@ module System.Posix.Socket
   , recvBufFrom
   , recvFrom'
   , recvFrom
+  -- ** Sending messages
   , sendBufs
   , sendMany'
   , sendMany
@@ -64,6 +67,7 @@ module System.Posix.Socket
   , sendBufTo
   , sendTo'
   , sendTo
+  -- ** Closing
   , shutdown
   , close
   ) where
@@ -77,8 +81,7 @@ import Data.List (partition)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Unsafe as BS
-import Data.Flags (Flags(..), (.>=.))
-import Data.Flags.TH (bitmaskWrapper)
+import Data.Flags (Flags(..), BoundedFlags(..), (.>=.))
 import Data.Foldable (forM_)
 import Control.Applicative ((<$>))
 import Control.Monad (void, when, foldM)
@@ -253,10 +256,30 @@ instance SockOpt SO_REUSEADDR where
   sockOptLevel _ = #const SOL_SOCKET
   sockOptCode  _ = #const SO_REUSEADDR
 
--- | Socket operations. Used by 'shutdown'.
-$(bitmaskWrapper "SockOps" ''Int []
-    [("sendSockOp", 1),
-     ("recvSockOp", 2)])
+-- | Socket operations.
+data SockOps = NoSockOps
+             | RecvSockOps
+             | SendSockOps
+             | AllSockOps
+             deriving (Typeable, Show, Read, Eq)
+
+instance Flags SockOps where
+  noFlags = NoSockOps
+  andFlags NoSockOps ops = ops
+  andFlags ops NoSockOps = ops
+  andFlags ops1 ops2 | ops1 == ops2 = ops1
+  andFlags _ _ = AllSockOps
+  butFlags _ AllSockOps = NoSockOps
+  butFlags ops1 ops2 | ops1 == ops2 = NoSockOps
+  butFlags ops _ = ops
+  commonFlags AllSockOps ops = ops
+  commonFlags ops AllSockOps = ops
+  commonFlags ops1 ops2 | ops1 == ops2 = ops1
+  commonFlags _ _ = NoSockOps
+
+instance BoundedFlags SockOps where
+  allFlags = AllSockOps
+  enumFlags f = filter (f .>=.) [RecvSockOps, SendSockOps]
 
 -- | Message flags.
 newtype MsgFlags = MsgFlags CInt deriving (Typeable, Eq, Show, Storable, Flags)
@@ -801,13 +824,13 @@ sendTo s bs addr = sendTo' s bs noFlags addr
 shutdown ∷ MonadBase IO μ ⇒ Socket f → SockOps → μ ()
 shutdown s dirs = withSocketFd s $ \fd →
     forM_ how $ throwErrnoIfMinus1_ "shutdown" . c_shutdown fd
-  where how = if dirs .>=. sendSockOp then
-                if dirs .>=. recvSockOp then
+  where how = if dirs .>=. SendSockOps then
+                if dirs .>=. RecvSockOps then
                   Just #{const SHUT_RDWR}
                 else
                   Just #{const SHUT_WR}
               else
-                if dirs .>=. recvSockOp then
+                if dirs .>=. RecvSockOps then
                   Just #{const SHUT_RD}
                 else
                   Nothing
