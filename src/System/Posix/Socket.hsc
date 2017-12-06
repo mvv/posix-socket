@@ -170,23 +170,23 @@ class SockAddr (SockFamilyAddr f) ⇒ SockFamily f where
 -- | Socket type.
 newtype SockType = SockType CInt deriving (Typeable, Eq, Ord, Show, Storable)
 
--- | See /socket(3)/.
+-- | See /socket(2)/.
 pattern SOCK_STREAM ∷ SockType
 pattern SOCK_STREAM = SockType #const SOCK_STREAM
 
--- | See /socket(3)/.
+-- | See /socket(2)/.
 pattern SOCK_DGRAM ∷ SockType
 pattern SOCK_DGRAM = SockType #const SOCK_DGRAM
 
--- | See /socket(3)/.
+-- | See /socket(2)/.
 pattern SOCK_RAW ∷ SockType
 pattern SOCK_RAW = SockType #const SOCK_RAW
 
--- | See /socket(3)/.
+-- | See /socket(2)/.
 pattern SOCK_RDM ∷ SockType
 pattern SOCK_RDM = SockType #const SOCK_RDM
 
--- | See /socket(3)/.
+-- | See /socket(2)/.
 pattern SOCK_SEQPACKET ∷ SockType
 pattern SOCK_SEQPACKET = SockType #const SOCK_SEQPACKET
 
@@ -317,7 +317,7 @@ withAddr fam addr f =
         famCode = fromIntegral $ sockFamilyCode fam
 
 -- | Create a socket. The underlying file descriptor is non-blocking. All
--- blocking operations are done via the GHC event manager. See /socket(3)/.
+-- blocking operations are done via the GHC event manager. See /socket(2)/.
 socket ∷ (SockFamily f, MonadBase IO μ)
        ⇒ f → SockType → SockProto → μ (Socket f)
 socket f (SockType t) p = liftBase $ do
@@ -340,12 +340,12 @@ getFdOpt fd o =
         c_getsockopt fd (sockOptLevel o) (sockOptCode o) p pSize
       sockOptValue o <$> peek p
 
--- | Get socket option value. See /getsockopt(3)/.
+-- | Get socket option value. See /getsockopt(2)/.
 getSockOpt ∷ (SockOpt o, SockOptReadable o ~ 'True, MonadBase IO μ)
            ⇒ Socket f → o → μ (SockOptValue o)
 getSockOpt s o = withSocketFd s $ \fd → getFdOpt fd o
 
--- | Set socket option value. See /setsockopt(3)/.
+-- | Set socket option value. See /setsockopt(2)/.
 setSockOpt ∷ (SockOpt o, SockOptWritable o ~ 'True, MonadBase IO μ)
            ⇒ Socket f → o → SockOptValue o → μ ()
 setSockOpt s o v = withSocketFd s $ \fd →
@@ -355,7 +355,7 @@ setSockOpt s o v = withSocketFd s $ \fd →
           fromIntegral (sizeOf raw)
   where raw = sockOptRaw o v
 
--- | Bind socket to the specified address. See /bind(3)/.
+-- | Bind socket to the specified address. See /bind(2)/.
 bind ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
      ⇒ Socket f → SockFamilyAddr f → μ ()
 bind s addr = withSocketFd s $ \fd →
@@ -363,7 +363,7 @@ bind s addr = withSocketFd s $ \fd →
     throwErrnoIfMinus1_ "bind" $ c_bind fd p $ fromIntegral size
 
 -- | Connect socket to the specified address. This operation blocks.
--- See /connect(3)/.
+-- See /connect(2)/.
 connect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
         ⇒ Socket f → SockFamilyAddr f → μ ()
 connect s addr = withSocketFd s $ \fd →
@@ -385,7 +385,7 @@ connect s addr = withSocketFd s $ \fd →
 
 -- | Try to connect socket without blocking. On success 'True' is returned.
 -- If the connection did not succeed immediately, 'False' is returned.
--- See /connect(3)/.
+-- See /connect(2)/.
 tryConnect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
            ⇒ Socket f → SockFamilyAddr f → μ Bool
 tryConnect s addr = withSocketFd s $ \fd →
@@ -400,13 +400,13 @@ tryConnect s addr = withSocketFd s $ \fd →
       else
         return True
 
--- | Listen for connections on the given socket. See /listen(3)/.
+-- | Listen for connections on the given socket. See /listen(2)/.
 listen ∷ MonadBase IO μ ⇒ Socket f → Int → μ ()
 listen s backlog = withSocketFd s $ \fd →
   throwErrnoIfMinus1_ "listen" $ c_listen fd $ fromIntegral backlog
 
 -- | Accept a connection on the given socket. This operation blocks.
--- See /accept(3)/. 
+-- See /accept(2)/.
 accept ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
        ⇒ Socket f → μ (Socket f, SockFamilyAddr f)
 accept s = withSocketFd s $ \fd →
@@ -434,7 +434,7 @@ accept s = withSocketFd s $ \fd →
 
 -- | Try to accept a connection on the given socket without blocking.
 -- On success the accepted socket and the peer address are returned.
--- See /accept(3)/.
+-- See /accept(2)/.
 tryAccept ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
           ⇒ Socket f → μ (Maybe (Socket f, SockFamilyAddr f))
 tryAccept s = withSocketFd s $ \fd →
@@ -457,7 +457,7 @@ tryAccept s = withSocketFd s $ \fd →
 #endif
           Just . (, addr) <$> unsafeSocketFromFd accFd
 
--- | Get the local address. See /getsockname(3)/.
+-- | Get the local address. See /getsockname(2)/.
 getLocalAddr ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
              ⇒ Socket f → μ (SockFamilyAddr f)
 getLocalAddr s = withSocketFd s $ \fd →
@@ -466,7 +466,7 @@ getLocalAddr s = withSocketFd s $ \fd →
       throwErrnoIfMinus1_ "getLocalAddr" $ c_getsockname fd p pSize
       peekAddrOfSize (undefined ∷ f) p pSize
 
--- | Get the remote address. See /getpeername(3)/.
+-- | Get the remote address. See /getpeername(2)/.
 getRemoteAddr ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
               ⇒ Socket f → μ (SockFamilyAddr f)
 getRemoteAddr s = withSocketFd s $ \fd →
@@ -540,7 +540,7 @@ recvBufsFrom' s bufs flags = withSocketFd s $ \fd →
   recvBufsFromFd (undefined ∷ f) fd bufs flags
 
 -- | Receive a message from a connected socket, possibly utilizing multiple
--- memory buffers. See /recvmsg(3)/.
+-- memory buffers. See /recvmsg(2)/.
 recvBufs ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f           -- ^ The socket
          → [(Ptr Word8, Int)] -- ^ Memory buffers
@@ -551,7 +551,7 @@ recvBufs s bufs flags = do
   return (r, flags')
 
 -- | Receive a message from a connected socket. This operation blocks.
--- See /recvmsg(3)/.
+-- See /recvmsg(2)/.
 recvBuf ∷ (SockFamily f, MonadBase IO μ)
         ⇒ Socket f          -- ^ The socket
         → Ptr α             -- ^ Buffer pointer
@@ -561,7 +561,7 @@ recvBuf ∷ (SockFamily f, MonadBase IO μ)
 recvBuf s p len flags = recvBufs s [(castPtr p, len)] flags
 
 -- | Receive a message from a connected socket. This operation blocks.
--- See /recvmsg(3)/.
+-- See /recvmsg(2)/.
 recv' ∷ (SockFamily f, MonadBase IO μ)
       ⇒ Socket f                 -- ^ The socket
       → Int                      -- ^ Maximum message length
@@ -573,7 +573,7 @@ recv' s len flags =
     return (0, r, flags')
 
 -- | Receive a message from a connected socket. This operation blocks.
--- See /recvmsg(3)/.
+-- See /recvmsg(2)/.
 recv ∷ (SockFamily f, MonadBase IO μ)
      ⇒ Socket f     -- ^ The socket
      → Int          -- ^ Maximum message length
@@ -581,7 +581,7 @@ recv ∷ (SockFamily f, MonadBase IO μ)
 recv s len = fst <$> recv' s len noFlags
 
 -- | Receive a message from an unconnected socket, possibly utilizing multiple
--- memory buffers. This operation blocks. See /recvmsg(3)/.
+-- memory buffers. This operation blocks. See /recvmsg(2)/.
 recvBufsFrom ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
              ⇒ Socket f                            -- ^ The socket
              → [(Ptr Word8, Int)]                  -- ^ Memory buffers
@@ -598,7 +598,7 @@ recvBufsFrom s bufs flags = withSocketFd s $ \fd → do
   (, n, flags') <$> maybe getpeername return mAddr
 
 -- | Receive a message from an unconnected socket. This operation blocks.
--- See /recvmsg(3)/.
+-- See /recvmsg(2)/.
 recvBufFrom ∷ (SockFamily f, MonadBase IO μ)
             ⇒ Socket f -- ^ The socket
             → Ptr α    -- ^ Buffer pointer
@@ -609,7 +609,7 @@ recvBufFrom ∷ (SockFamily f, MonadBase IO μ)
 recvBufFrom s p len flags = recvBufsFrom s [(castPtr p, len)] flags
 
 -- | Receive a message from an unconnected socket. This operation blocks.
--- See /recvmsg(3)/.
+-- See /recvmsg(2)/.
 recvFrom' ∷ (SockFamily f, MonadBase IO μ)
           ⇒ Socket f -- ^ The socket
           → Int      -- ^ Maximum message length
@@ -623,7 +623,7 @@ recvFrom' s len flags = liftBase $ do
   return (addr, bs, flags')
 
 -- | Receive a message from an unconnected socket. This operation blocks.
--- See /recvmsg(3)/.
+-- See /recvmsg(2)/.
 recvFrom ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f -- ^ The socket
          → Int      -- ^ Maximum message length
@@ -679,12 +679,12 @@ _sendBufs s bufs' flags mAddr = withSocketFd s $ \fd → do
         cont
 
 -- | Send a message split into several memory buffers on a connected socket.
--- This operation blocks. See /sendmsg(3)/.
+-- This operation blocks. See /sendmsg(2)/.
 sendBufs ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f           -- ^ The socket
          → [(Ptr Word8, Int)] -- ^ Memory buffers
          → MsgFlags           -- ^ Message flags
-         → μ Int              -- ^ The number of bytes sent 
+         → μ Int              -- ^ The number of bytes sent
 sendBufs s bufs flags = _sendBufs s bufs flags Nothing
 
 withBufs ∷ [ByteString] → ([(Ptr Word8, Int)] → IO α) → IO α
@@ -694,7 +694,7 @@ withBufs bss f = go bss []
                                  go bss' ((castPtr p, len) : rbufs)
 
 -- | Send a message split into several 'ByteString's on a connected socket.
--- This operation blocks. See /sendmsg(3)/.
+-- This operation blocks. See /sendmsg(2)/.
 sendMany' ∷ (SockFamily f, MonadBase IO μ)
           ⇒ Socket f     -- ^ The socket
           → [ByteString] -- ^ Message contents
@@ -704,7 +704,7 @@ sendMany' s bss flags =
   liftBase $ withBufs bss $ \bufs → sendBufs s bufs flags
 
 -- | Send a message split into several 'ByteString's on a connected socket.
--- This operation blocks. See /sendmsg(3)/.
+-- This operation blocks. See /sendmsg(2)/.
 sendMany ∷ (SockFamily f, MonadBase IO μ)
          ⇒ Socket f     -- ^ The socket
          → [ByteString] -- ^ Message contents
@@ -712,7 +712,7 @@ sendMany ∷ (SockFamily f, MonadBase IO μ)
 sendMany s bss = sendMany' s bss noFlags
 
 -- | Send a message on a connected socket. This operation blocks.
--- See /sendmsg(3)/.
+-- See /sendmsg(2)/.
 sendBuf ∷ (SockFamily f, MonadBase IO μ)
         ⇒ Socket f -- ^ The socket
         → Ptr α    -- ^ Buffer pointer
@@ -722,7 +722,7 @@ sendBuf ∷ (SockFamily f, MonadBase IO μ)
 sendBuf s p len flags = sendBufs s [(castPtr p, len)] flags
 
 -- | Send a message on a connected socket. This operation blocks.
--- See /sendmsg(3)/.
+-- See /sendmsg(2)/.
 send' ∷ (SockFamily f, MonadBase IO μ)
       ⇒ Socket f   -- ^ The socket
       → ByteString -- ^ Message contents
@@ -732,7 +732,7 @@ send' s bs flags = liftBase $ BS.unsafeUseAsCStringLen bs $ \(p, len) →
                      sendBuf s p len flags
 
 -- | Send a message on a connected socket. This operation blocks.
--- See /sendmsg(3)/.
+-- See /sendmsg(2)/.
 send ∷ (SockFamily f, MonadBase IO μ)
      ⇒ Socket f   -- ^ The socket
      → ByteString -- ^ Message contents
@@ -740,7 +740,7 @@ send ∷ (SockFamily f, MonadBase IO μ)
 send s bs = send' s bs noFlags
 
 -- | Send a message split into several memory buffers on an unconnected
--- socket. This operation blocks. See /sendmsg(3)/.
+-- socket. This operation blocks. See /sendmsg(2)/.
 sendBufsTo ∷ (SockFamily f, MonadBase IO μ)
            ⇒ Socket f           -- ^ The socket
            → [(Ptr Word8, Int)] -- ^ Memory buffers
@@ -750,7 +750,7 @@ sendBufsTo ∷ (SockFamily f, MonadBase IO μ)
 sendBufsTo s bufs flags addr = _sendBufs s bufs flags (Just addr)
 
 -- | Send a message split into several 'ByteString's on an unconnected socket.
--- This operation blocks. See /sendmsg(3)/.
+-- This operation blocks. See /sendmsg(2)/.
 sendManyTo' ∷ (SockFamily f, MonadBase IO μ)
             ⇒ Socket f         -- ^ The socket
             → [ByteString]     -- ^ Message contents
@@ -761,7 +761,7 @@ sendManyTo' s bss flags addr = liftBase $ withBufs bss $ \bufs →
                                  sendBufsTo s bufs flags addr
 
 -- | Send a message split into several 'ByteString's on an unconnected socket.
--- This operation blocks. See /sendmsg(3)/.
+-- This operation blocks. See /sendmsg(2)/.
 sendManyTo ∷ (SockFamily f, MonadBase IO μ)
            ⇒ Socket f         -- ^ The socket
            → [ByteString]     -- ^ Message contents
@@ -770,7 +770,7 @@ sendManyTo ∷ (SockFamily f, MonadBase IO μ)
 sendManyTo s bss addr = sendManyTo' s bss noFlags addr
 
 -- | Send a message on an unconnected socket. This operation blocks.
--- See /sendmsg(3)/.
+-- See /sendmsg(2)/.
 sendBufTo ∷ (SockFamily f, MonadBase IO μ)
           ⇒ Socket f         -- ^ The socket
           → Ptr α            -- ^ Buffer pointer
@@ -781,7 +781,7 @@ sendBufTo ∷ (SockFamily f, MonadBase IO μ)
 sendBufTo s p len flags addr = sendBufsTo s [(castPtr p, len)] flags addr
 
 -- | Send a message on an unconnected socket. This operation blocks.
--- See /sendmsg(3)/.
+-- See /sendmsg(2)/.
 sendTo' ∷ (SockFamily f, MonadBase IO μ)
         ⇒ Socket f         -- ^ The socket
         → ByteString       -- ^ Message contents
@@ -793,7 +793,7 @@ sendTo' s bs flags addr =
     sendBufTo s p len flags addr
 
 -- | Send a message on an unconnected socket. This operation blocks.
--- See /sendmsg(3)/.
+-- See /sendmsg(2)/.
 sendTo ∷ (SockFamily f, MonadBase IO μ)
        ⇒ Socket f         -- ^ The socket
        → ByteString       -- ^ Message contents
@@ -801,7 +801,7 @@ sendTo ∷ (SockFamily f, MonadBase IO μ)
        → μ Int            -- ^ The number of bytes sent
 sendTo s bs addr = sendTo' s bs noFlags addr
 
--- | Shut down a part of a full-duplex connection. See /shutdown(3)/.
+-- | Shut down a part of a full-duplex connection. See /shutdown(2)/.
 shutdown ∷ MonadBase IO μ ⇒ Socket f → SockOps → μ ()
 shutdown s dirs = withSocketFd s $ \fd →
     forM_ how $ throwErrnoIfMinus1_ "shutdown" . c_shutdown fd
@@ -816,7 +816,7 @@ shutdown s dirs = withSocketFd s $ \fd →
                 else
                   Nothing
 
--- | Close the socket. See /close(3)/.
+-- | Close the socket. See /close(2)/.
 close ∷ MonadBase IO μ ⇒ Socket f → μ ()
 close (Socket v) = liftBase $ modifyMVar_ v $ \fd → do
   when (fd >= 0) $ closeFdWith closeFd fd
