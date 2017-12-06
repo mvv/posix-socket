@@ -30,11 +30,7 @@ module System.Posix.Socket
   , SockOps
   , sendSockOp
   , recvSockOp
-  , MsgFlags
-  , peekMsgFlag
-  , truncMsgFlag
-  , oobMsgFlag
-  , dontRouteMsgFlag
+  , MsgFlags(.., MSG_PEEK, MSG_TRUNC, MSG_OOB, MSG_DONTROUTE)
 
   , socket
   , getSockOpt
@@ -265,21 +261,21 @@ $(bitmaskWrapper "SockOps" ''Int []
 -- | Message flags.
 newtype MsgFlags = MsgFlags CInt deriving (Typeable, Eq, Show, Storable, Flags)
 
--- | See /MSG_PEEK/.
-peekMsgFlag ∷ MsgFlags
-peekMsgFlag = MsgFlags #const MSG_PEEK
+-- | See /recvmsg(2)/ and /sendmsg(2)/.
+pattern MSG_PEEK ∷ MsgFlags
+pattern MSG_PEEK = MsgFlags #const MSG_PEEK
 
--- | See /MSG_TRUNC/.
-truncMsgFlag ∷ MsgFlags
-truncMsgFlag = MsgFlags #const MSG_TRUNC
+-- | See /recvmsg(2)/ and /sendmsg(2)/.
+pattern MSG_TRUNC ∷ MsgFlags
+pattern MSG_TRUNC = MsgFlags #const MSG_TRUNC
 
--- | See /MSG_OOB/.
-oobMsgFlag ∷ MsgFlags
-oobMsgFlag = MsgFlags #const MSG_OOB
+-- | See /recvmsg(2)/ and /sendmsg(2)/.
+pattern MSG_OOB ∷ MsgFlags
+pattern MSG_OOB = MsgFlags #const MSG_OOB
 
--- | See /MSG_DONTROUTE/.
-dontRouteMsgFlag ∷ MsgFlags
-dontRouteMsgFlag = MsgFlags #const MSG_DONTROUTE
+-- | See /recvmsg(2)/ and /sendmsg(2)/.
+pattern MSG_DONTROUTE ∷ MsgFlags
+pattern MSG_DONTROUTE = MsgFlags #const MSG_DONTROUTE
 
 allocaMaxAddr ∷ SockAddr a ⇒ Proxy a → (Ptr a → #{itype socklen_t} → IO α) → IO α
 allocaMaxAddr addrProxy f =
