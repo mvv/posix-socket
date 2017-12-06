@@ -22,7 +22,12 @@ module System.Posix.Socket
   , unsafeSocketFromFd
   , SockFamily(..)
   , SockAddr(..)
-  , SockType(.., SOCK_STREAM, SOCK_DGRAM, SOCK_RAW, SOCK_RDM, SOCK_SEQPACKET)
+  , SockType(..)
+  , pattern SOCK_STREAM
+  , pattern SOCK_DGRAM
+  , pattern SOCK_RAW
+  , pattern SOCK_RDM
+  , pattern SOCK_SEQPACKET
   , SockProto(..)
   , defaultSockProto
   , SockOpt(..)
@@ -30,7 +35,11 @@ module System.Posix.Socket
   , SO_KEEPALIVE(..)
   , SO_REUSEADDR(..)
   , SockOps(..)
-  , MsgFlags(.., MSG_PEEK, MSG_TRUNC, MSG_OOB, MSG_DONTROUTE)
+  , MsgFlags(..)
+  , pattern MSG_PEEK
+  , pattern MSG_TRUNC
+  , pattern MSG_OOB
+  , pattern MSG_DONTROUTE
   -- * Socket operations
   -- ** Creating and connecting
   , socket
