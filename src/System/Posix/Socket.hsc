@@ -10,6 +10,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | POSIX sockets.
 module System.Posix.Socket
@@ -19,11 +20,7 @@ module System.Posix.Socket
   , unsafeSocketFromFd
   , SockFamily(..)
   , SockAddr(..)
-  , SockType(..)
-  , streamSockType
-  , datagramSockType
-  , rawSockType
-  , seqPacketSockType
+  , SockType(.., SOCK_STREAM, SOCK_DGRAM, SOCK_RAW, SOCK_RDM, SOCK_SEQPACKET)
   , SockProto(..)
   , defaultSockProto
   , SockOpt(..)
@@ -142,10 +139,12 @@ withSocketFd (Socket v) f = liftBase $ withMVar v f
 -- | Get the underlying file descriptor.
 unsafeSocketFd ∷ MonadBase IO μ ⇒ Socket f → μ Fd
 unsafeSocketFd (Socket v) = liftBase $ readMVar v
+{-# INLINE unsafeSocketFd #-}
 
 -- | Use file descriptor as a socket.
 unsafeSocketFromFd ∷ MonadBase IO μ ⇒ Fd → μ (Socket f)
 unsafeSocketFromFd = liftBase . fmap Socket . newMVar
+{-# INLINE unsafeSocketFromFd #-}
 
 -- | Socket address.
 class SockAddr a where
@@ -171,21 +170,25 @@ class SockAddr (SockFamilyAddr f) ⇒ SockFamily f where
 -- | Socket type.
 newtype SockType = SockType CInt deriving (Typeable, Eq, Ord, Show, Storable)
 
--- | See /SOCK_STREAM/.
-streamSockType ∷ SockType
-streamSockType = SockType #const SOCK_STREAM
+-- | See /socket(3)/.
+pattern SOCK_STREAM ∷ SockType
+pattern SOCK_STREAM = SockType #const SOCK_STREAM
 
--- | See /SOCK_DGRAM/.
-datagramSockType ∷ SockType
-datagramSockType = SockType #const SOCK_DGRAM
+-- | See /socket(3)/.
+pattern SOCK_DGRAM ∷ SockType
+pattern SOCK_DGRAM = SockType #const SOCK_DGRAM
 
--- | See /SOCK_RAW/.
-rawSockType ∷ SockType
-rawSockType = SockType #const SOCK_RAW
+-- | See /socket(3)/.
+pattern SOCK_RAW ∷ SockType
+pattern SOCK_RAW = SockType #const SOCK_RAW
 
--- | See /SOCK_SEQPACKET/.
-seqPacketSockType ∷ SockType
-seqPacketSockType = SockType #const SOCK_SEQPACKET
+-- | See /socket(3)/.
+pattern SOCK_RDM ∷ SockType
+pattern SOCK_RDM = SockType #const SOCK_RDM
+
+-- | See /socket(3)/.
+pattern SOCK_SEQPACKET ∷ SockType
+pattern SOCK_SEQPACKET = SockType #const SOCK_SEQPACKET
 
 -- | Socket protocol.
 newtype SockProto = SockProto CInt deriving (Typeable, Eq, Ord, Show, Storable)
