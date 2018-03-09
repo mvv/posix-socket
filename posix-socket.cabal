@@ -1,5 +1,5 @@
 Name: posix-socket
-Version: 0.2
+Version: 0.3
 Category: System
 Stability: experimental
 Synopsis: Bindings to the POSIX socket API
