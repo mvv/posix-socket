@@ -19,7 +19,7 @@ Extra-Source-Files:
   include/posix-socket.macros.h
   README.md
 
-Tested-With: GHC==7.10.3, GHC==8.0.2, GHC==8.2.2
+Tested-With: GHC==7.10.3, GHC==8.0.2, GHC==8.2.2, GHC==8.4.1
 
 Cabal-Version: >= 1.6.0
 Build-Type: Simple
