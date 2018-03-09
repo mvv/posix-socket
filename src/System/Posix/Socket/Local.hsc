@@ -2,13 +2,16 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Local address family.
 module System.Posix.Socket.Local
   ( LocalAddr(..)
   , aLocalAddr
-  , AF_LOCAL(..)
+  , AF_LOCAL
+  , pattern AF_LOCAL
   ) where
 
 import Data.Typeable (Typeable)
@@ -27,7 +30,10 @@ import System.Posix.Socket
 #include <sys/un.h>
 
 -- | Local socket family.
-data AF_LOCAL = AF_LOCAL deriving (Typeable, Eq, Show)
+data AF_LOCAL deriving Typeable
+
+pattern AF_LOCAL ∷ Proxy AF_LOCAL
+pattern AF_LOCAL = Proxy
 
 -- | Local socket address.
 data LocalAddr = LocalAddr ByteString

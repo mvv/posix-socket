@@ -2,6 +2,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -9,11 +11,14 @@
 
 -- | Internet address families.
 module System.Posix.Socket.Inet
-  ( AF_INET(..)
-  , AF_INET6(..)
+  ( AF_INET
+  , pattern AF_INET
+  , AF_INET6
+  , pattern AF_INET6
   ) where
 
 import Data.Typeable (Typeable)
+import Data.Proxy (Proxy(..))
 import Network.IP.Addr
 import Control.Applicative ((<$>), (<*>))
 import Foreign.C.Types (CSize)
@@ -25,7 +30,10 @@ import System.Posix.Socket
 #include <netinet/ip6.h>
 
 -- | IPv4 socket family.
-data AF_INET = AF_INET deriving (Typeable, Eq, Show)
+data AF_INET deriving Typeable
+
+pattern AF_INET ∷ Proxy AF_INET
+pattern AF_INET = Proxy
 
 instance SockAddr Inet4Addr where
   sockAddrMaxSize _ = #{size struct sockaddr_in}
@@ -46,7 +54,10 @@ instance SockFamily AF_INET where
   sockFamilyCode _ = #const AF_INET
 
 -- | IPv6 socket family.
-data AF_INET6 = AF_INET6 deriving (Typeable, Eq, Show)
+data AF_INET6 deriving Typeable
+
+pattern AF_INET6 ∷ Proxy AF_INET6
+pattern AF_INET6 = Proxy
 
 instance SockAddr Inet6Addr where
   sockAddrMaxSize _ = #{size struct sockaddr_in6}

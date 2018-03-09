@@ -4,6 +4,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -31,9 +32,12 @@ module System.Posix.Socket
   , SockProto(..)
   , defaultSockProto
   , SockOpt(..)
-  , SO_ERROR(..)
-  , SO_KEEPALIVE(..)
-  , SO_REUSEADDR(..)
+  , SO_ERROR
+  , pattern SO_ERROR
+  , SO_KEEPALIVE
+  , pattern SO_KEEPALIVE
+  , SO_REUSEADDR
+  , pattern SO_REUSEADDR
   , SockOps(..)
   , MsgFlags(..)
   , pattern MSG_PEEK
@@ -173,7 +177,7 @@ class SockAddr a where
 class SockAddr (SockFamilyAddr f) ⇒ SockFamily f where
   type SockFamilyAddr f
   -- | Socket family code.
-  sockFamilyCode ∷ f → CInt
+  sockFamilyCode ∷ Proxy f → CInt
 
 -- | Socket type.
 newtype SockType = SockType CInt deriving (Typeable, Eq, Ord, Show, Storable)
@@ -219,15 +223,18 @@ class Storable (SockOptRaw o) ⇒ SockOpt o where
   -- | Whether option is writable
   type SockOptWritable o ∷ Bool
   -- | Convert to FFI-level value
-  sockOptRaw   ∷ o → SockOptValue o → SockOptRaw o
+  sockOptRaw   ∷ Proxy o → SockOptValue o → SockOptRaw o
   -- | Convert from FFI-level value
-  sockOptValue ∷ o → SockOptRaw o → SockOptValue o
+  sockOptValue ∷ Proxy o → SockOptRaw o → SockOptValue o
   -- | Option protocol level
-  sockOptLevel ∷ o → CInt
+  sockOptLevel ∷ Proxy o → CInt
   -- | Option code
-  sockOptCode  ∷ o → CInt
+  sockOptCode  ∷ Proxy o → CInt
 
-data SO_ERROR = SO_ERROR deriving (Typeable, Eq, Show)
+data SO_ERROR deriving Typeable
+
+pattern SO_ERROR ∷ Proxy SO_ERROR
+pattern SO_ERROR = Proxy
 
 instance SockOpt SO_ERROR where
   type SockOptValue    SO_ERROR = Errno
@@ -239,7 +246,10 @@ instance SockOpt SO_ERROR where
   sockOptLevel _ = #const SOL_SOCKET
   sockOptCode  _ = #const SO_ERROR
 
-data SO_KEEPALIVE = SO_KEEPALIVE deriving (Typeable, Eq, Show)
+data SO_KEEPALIVE deriving Typeable
+
+pattern SO_KEEPALIVE ∷ Proxy SO_KEEPALIVE
+pattern SO_KEEPALIVE = Proxy
 
 instance SockOpt SO_KEEPALIVE where
   type SockOptValue    SO_KEEPALIVE = Bool
@@ -252,7 +262,10 @@ instance SockOpt SO_KEEPALIVE where
   sockOptLevel _ = #const SOL_SOCKET
   sockOptCode  _ = #const SO_KEEPALIVE
 
-data SO_REUSEADDR = SO_REUSEADDR deriving (Typeable, Eq, Show)
+data SO_REUSEADDR deriving Typeable
+
+pattern SO_REUSEADDR ∷ Proxy SO_REUSEADDR
+pattern SO_REUSEADDR = Proxy
 
 instance SockOpt SO_REUSEADDR where
   type SockOptValue    SO_REUSEADDR = Bool
@@ -322,7 +335,7 @@ allocaAddr addr f =
   where size = sockAddrSize addr
 
 peekAddrOfSize ∷ SockFamily f
-               ⇒ f → Ptr (SockFamilyAddr f) → Ptr #{itype socklen_t}
+               ⇒ Proxy f → Ptr (SockFamilyAddr f) → Ptr #{itype socklen_t}
                → IO (SockFamilyAddr f)
 peekAddrOfSize fam p pSize = do
   outSize ← fromIntegral <$> peek pSize
@@ -332,7 +345,7 @@ peekAddrOfSize fam p pSize = do
   peekSockAddr p outSize
 
 withAddr ∷ SockFamily f
-         ⇒ f
+         ⇒ Proxy f
          → SockFamilyAddr f
          → (Ptr (SockFamilyAddr f) → #{itype socklen_t} → IO α)
          → IO α
@@ -347,7 +360,7 @@ withAddr fam addr f =
 -- | Create a socket. The underlying file descriptor is non-blocking. All
 -- blocking operations are done via the GHC event manager. See /socket(2)/.
 socket ∷ (SockFamily f, MonadBase IO μ)
-       ⇒ f → SockType → SockProto → μ (Socket f)
+       ⇒ Proxy f → SockType → SockProto → μ (Socket f)
 socket f (SockType t) p = liftBase $ do
   fd ← throwErrnoIfMinus1 "socket" $
          c_socket (sockFamilyCode f)
@@ -360,7 +373,7 @@ socket f (SockType t) p = liftBase $ do
   fmap Socket $ newMVar $ Fd fd
 
 getFdOpt ∷ ∀ o . (SockOpt o, SockOptReadable o ~ 'True)
-         ⇒ Fd → o → IO (SockOptValue o)
+         ⇒ Fd → Proxy o → IO (SockOptValue o)
 getFdOpt fd o =
   alloca $ \p →
     with (fromIntegral $ sizeOf (undefined ∷ SockOptRaw o)) $ \pSize → do
@@ -370,12 +383,12 @@ getFdOpt fd o =
 
 -- | Get socket option value. See /getsockopt(2)/.
 getSockOpt ∷ (SockOpt o, SockOptReadable o ~ 'True, MonadBase IO μ)
-           ⇒ Socket f → o → μ (SockOptValue o)
+           ⇒ Socket f → Proxy o → μ (SockOptValue o)
 getSockOpt s o = withSocketFd s $ \fd → getFdOpt fd o
 
 -- | Set socket option value. See /setsockopt(2)/.
 setSockOpt ∷ (SockOpt o, SockOptWritable o ~ 'True, MonadBase IO μ)
-           ⇒ Socket f → o → SockOptValue o → μ ()
+           ⇒ Socket f → Proxy o → SockOptValue o → μ ()
 setSockOpt s o v = withSocketFd s $ \fd →
     with raw $ \p →
       throwErrnoIfMinus1_ "setSockOpt" $
@@ -387,7 +400,7 @@ setSockOpt s o v = withSocketFd s $ \fd →
 bind ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
      ⇒ Socket f → SockFamilyAddr f → μ ()
 bind s addr = withSocketFd s $ \fd →
-  withAddr (undefined ∷ f) addr $ \p size →
+  withAddr (Proxy ∷ Proxy f) addr $ \p size →
     throwErrnoIfMinus1_ "bind" $ c_bind fd p $ fromIntegral size
 
 -- | Connect socket to the specified address. This operation blocks.
@@ -395,7 +408,7 @@ bind s addr = withSocketFd s $ \fd →
 connect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
         ⇒ Socket f → SockFamilyAddr f → μ ()
 connect s addr = withSocketFd s $ \fd →
-    withAddr (undefined ∷ f) addr $ \p size →
+    withAddr (Proxy ∷ Proxy f) addr $ \p size →
       doConnect fd p $ fromIntegral size
   where doConnect fd p size = do
           r ← c_connect fd p size
@@ -417,7 +430,7 @@ connect s addr = withSocketFd s $ \fd →
 tryConnect ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
            ⇒ Socket f → SockFamilyAddr f → μ Bool
 tryConnect s addr = withSocketFd s $ \fd →
-  withAddr (undefined ∷ f) addr $ \p size → do
+  withAddr (Proxy ∷ Proxy f) addr $ \p size → do
     r ← c_connect fd p $ fromIntegral size
     if r == -1
       then do
@@ -453,7 +466,7 @@ accept s = withSocketFd s $ \fd →
                 doAccept fd p pSize
               _ → throwErrno "accept"
           else do
-            addr ← peekAddrOfSize (undefined ∷ f) p pSize
+            addr ← peekAddrOfSize (Proxy ∷ Proxy f) p pSize
             let accFd = Fd cfd
 #ifndef HAVE_ACCEPT_WITH_FLAGS
             onException (setNonBlockingFD accFd True) (closeFd accFd)
@@ -478,7 +491,7 @@ tryAccept s = withSocketFd s $ \fd →
             e | e == eAGAIN || e == eWOULDBLOCK → return Nothing
             _ → throwErrno "accept"
         else do
-          addr ← peekAddrOfSize (undefined ∷ f) p pSize
+          addr ← peekAddrOfSize (Proxy ∷ Proxy f) p pSize
           let accFd = Fd cfd
 #ifndef HAVE_ACCEPT_WITH_FLAGS
           onException (setNonBlockingFD accFd True) (closeFd accFd)
@@ -492,7 +505,7 @@ getLocalAddr s = withSocketFd s $ \fd →
   allocaMaxAddr (Proxy ∷ Proxy (SockFamilyAddr f)) $ \p size →
     with size $ \pSize → do
       throwErrnoIfMinus1_ "getLocalAddr" $ c_getsockname fd p pSize
-      peekAddrOfSize (undefined ∷ f) p pSize
+      peekAddrOfSize (Proxy ∷ Proxy f) p pSize
 
 -- | Get the remote address. See /getpeername(2)/.
 getRemoteAddr ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
@@ -501,7 +514,7 @@ getRemoteAddr s = withSocketFd s $ \fd →
   allocaMaxAddr (Proxy ∷ Proxy (SockFamilyAddr f)) $ \p size →
     with size $ \pSize → do
       throwErrnoIfMinus1_ "getRemoteAddr" $ c_getpeername fd p pSize
-      peekAddrOfSize (undefined ∷ f) p pSize
+      peekAddrOfSize (Proxy ∷ Proxy f) p pSize
 
 -- | Check if socket has out-of-band data. See /sockatmark(3)/.
 hasOobData ∷ MonadBase IO μ ⇒ Socket f → μ Bool
@@ -516,7 +529,7 @@ throwInval ∷ String → IO α
 throwInval loc = throwCustomErrno loc eINVAL
 
 recvBufsFromFd ∷ ∀ f . SockFamily f
-               ⇒ f → Fd → [(Ptr Word8, Int)] → MsgFlags
+               ⇒ Proxy f → Fd → [(Ptr Word8, Int)] → MsgFlags
                → IO (Maybe (SockFamilyAddr f), Int, MsgFlags)
 recvBufsFromFd _ fd bufs' flags = do
   let (bufs, bufs'') = partition ((> 0) . snd) bufs'
@@ -565,7 +578,7 @@ recvBufsFrom' ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
               ⇒ Socket f → [(Ptr Word8, Int)] → MsgFlags
               → μ (Maybe (SockFamilyAddr f), Int, MsgFlags)
 recvBufsFrom' s bufs flags = withSocketFd s $ \fd →
-  recvBufsFromFd (undefined ∷ f) fd bufs flags
+  recvBufsFromFd (Proxy ∷ Proxy f) fd bufs flags
 
 -- | Receive a message from a connected socket, possibly utilizing multiple
 -- memory buffers. See /recvmsg(2)/.
@@ -617,12 +630,12 @@ recvBufsFrom ∷ ∀ f μ . (SockFamily f, MonadBase IO μ)
              → μ (SockFamilyAddr f, Int, MsgFlags)
              -- ^ Received message source address, length, and flags
 recvBufsFrom s bufs flags = withSocketFd s $ \fd → do
-  (mAddr, n, flags') ← recvBufsFromFd (undefined ∷ f) fd bufs flags
+  (mAddr, n, flags') ← recvBufsFromFd (Proxy ∷ Proxy f) fd bufs flags
   let getpeername =
         allocaMaxAddr (Proxy ∷ Proxy (SockFamilyAddr f)) $ \p size →
           with size $ \pSize → do
             throwErrnoIfMinus1_ "recv" $ c_getpeername fd p pSize
-            peekAddrOfSize (undefined ∷ f) p pSize
+            peekAddrOfSize (Proxy ∷ Proxy f) p pSize
   (, n, flags') <$> maybe getpeername return mAddr
 
 -- | Receive a message from an unconnected socket. This operation blocks.
@@ -697,7 +710,7 @@ _sendBufs s bufs' flags mAddr = withSocketFd s $ \fd → do
           doSend
     case mAddr of
       Just addr →
-        withAddr (undefined ∷ f) addr $ \pAddr addrLen → do
+        withAddr (Proxy ∷ Proxy f) addr $ \pAddr addrLen → do
           #{poke struct msghdr, msg_name}    pHdr pAddr
           #{poke struct msghdr, msg_namelen} pHdr addrLen
           cont
