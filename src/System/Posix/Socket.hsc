@@ -81,6 +81,9 @@ module System.Posix.Socket
   , sendTo'
   , sendTo
   -- ** Closing
+  , pattern SHUT_RD
+  , pattern SHUT_WR
+  , pattern SHUT_RDWR
   , shutdown
   , close
   ) where
@@ -841,6 +844,18 @@ sendTo ∷ (SockFamily f, MonadBase IO μ)
        → SockFamilyAddr f -- ^ Message destination address
        → μ Int            -- ^ The number of bytes sent
 sendTo s bs addr = sendTo' s bs noFlags addr
+
+-- | An alias for 'RecvSockOps'.
+pattern SHUT_RD ∷ SockOps
+pattern SHUT_RD = RecvSockOps
+
+-- | An alias for 'SendSockOps'.
+pattern SHUT_WR ∷ SockOps
+pattern SHUT_WR = SendSockOps
+
+-- | An alias for 'AllSockOps'.
+pattern SHUT_RDWR ∷ SockOps
+pattern SHUT_RDWR = AllSockOps
 
 -- | Shut down a part of a full-duplex connection. See /shutdown(2)/.
 shutdown ∷ MonadBase IO μ ⇒ Socket f → SockOps → μ ()
