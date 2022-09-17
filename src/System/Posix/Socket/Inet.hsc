@@ -20,7 +20,9 @@ module System.Posix.Socket.Inet
 import Data.Typeable (Typeable)
 import Data.Proxy (Proxy(..))
 import Network.IP.Addr
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>), (<*>))
+#endif
 import Foreign.C.Types (CSize)
 import Foreign.Storable (Storable(..))
 import System.Posix.Socket

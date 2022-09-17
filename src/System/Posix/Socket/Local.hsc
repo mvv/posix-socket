@@ -21,7 +21,9 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Unsafe as BS
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
+#endif
 import Foreign.Ptr (castPtr, plusPtr)
 import Foreign.Storable (Storable(..))
 import System.Posix.Socket

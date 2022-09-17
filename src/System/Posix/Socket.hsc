@@ -8,6 +8,7 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds #-}
@@ -99,7 +100,9 @@ import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Unsafe as BS
 import Data.Flags (Flags(..), BoundedFlags(..), (.>=.))
 import Data.Foldable (forM_)
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
+#endif
 import Control.Monad (void, when, foldM)
 import Control.Monad.Base
 import Control.Exception (throwIO)
